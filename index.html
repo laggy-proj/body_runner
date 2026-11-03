@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Body Runner 3D</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0e1a2b;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#fff;overflow:hidden}
+#app{display:grid;grid-template-columns:3fr 1fr;height:100vh;width:100vw}
+#stage{position:relative;overflow:hidden;background:#8fd3ff}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#side{background:#14233a;border-left:3px solid #26406a;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+#side h3{margin:0;font-size:15px;letter-spacing:.5px;color:#9fd0ff}
+#vwrap{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:12px;overflow:hidden;border:2px solid #2b4a7a}
+#cam,#skel{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);object-fit:cover}
+#vph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;font-size:13px;color:#8aa7cc}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;padding:10px 14px;font-weight:700;color:#fff;background:#2f7bff;box-shadow:0 3px 0 #1b4fb3;transition:transform .08s}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #1b4fb3}
+button.alt{background:#37506f;box-shadow:0 3px 0 #223348}
+button.go{background:#2fc36b;box-shadow:0 3px 0 #1c8a49;font-size:20px;padding:14px 26px}
+button.sel{outline:3px solid #ffd23f}
+button:disabled{opacity:.4;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+#status{display:flex;align-items:center;gap:8px;font-size:13px}
+#dot{width:12px;height:12px;border-radius:50%;background:#e04b4b}
+#action{font-size:26px;font-weight:900;text-align:center;padding:8px;border-radius:12px;background:#0b1626;letter-spacing:2px;color:#ffd23f}
+.legend{display:flex;gap:10px;font-size:12px;color:#9db6d6}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+label.sl{display:flex;flex-direction:column;font-size:12px;color:#9db6d6;gap:2px}
+input[type=range]{width:100%}
+.note{font-size:11px;color:#7f97b8;line-height:1.35}
+.ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;padding:20px;z-index:5}
+.ov.show{display:flex}
+.card{background:rgba(14,30,56,.88);border:3px solid #ffd23f;border-radius:22px;padding:22px 28px;max-width:640px;backdrop-filter:blur(4px)}
+.card h1{margin:0 0 4px;font-size:44px;letter-spacing:2px;color:#ffd23f;text-shadow:0 4px 0 #b57b00}
+.card h2{margin:0 0 8px;font-size:28px;color:#ffd23f}
+.card p{margin:6px 0}
+.swatch{width:34px;height:34px;border-radius:50%;border:3px solid #fff;padding:0;box-shadow:none}
+.swatch.lock{filter:grayscale(1) brightness(.5)}
+#hud{position:absolute;inset:0;pointer-events:none;z-index:3}
+#stars{position:absolute;left:16px;top:14px;font-size:30px;font-weight:900;background:rgba(0,0,0,.35);border-radius:30px;padding:4px 18px 4px 12px;display:flex;align-items:center;gap:8px}
+#lvl{position:absolute;left:50%;top:14px;transform:translateX(-50%);text-align:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.4)}
+#bar{width:220px;height:12px;border-radius:8px;background:rgba(0,0,0,.35);overflow:hidden;margin-top:4px}
+#barf{height:100%;width:0;background:linear-gradient(90deg,#ffd23f,#ff8a3d)}
+#hint{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);font-size:44px;font-weight:900;text-shadow:0 4px 0 rgba(0,0,0,.45);white-space:nowrap;opacity:0;transition:opacity .2s;color:#fff}
+#hint.on{opacity:1;animation:pulse .9s infinite}
+@keyframes pulse{50%{transform:translateX(-50%) scale(1.07)}}
+#pausebtn{position:absolute;right:14px;top:12px;pointer-events:auto;z-index:4;padding:8px 14px}
+#banner{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%) scale(.6);font-size:64px;font-weight:900;color:#ffd23f;text-shadow:0 5px 0 #b57b00;opacity:0;pointer-events:none;z-index:6;transition:all .5s}
+#banner.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#tut{position:absolute;left:50%;bottom:4%;transform:translateX(-50%);z-index:5;display:none;flex-direction:column;gap:8px;align-items:center}
+#tut.show{display:flex}
+#tutt{font-size:34px;font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.5)}
+.dots{display:flex;gap:8px}.dots i{width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.35)}.dots i.on{background:#2fc36b}
+#cprog{width:320px;height:16px;border-radius:10px;background:rgba(255,255,255,.2);overflow:hidden}
+#cprogf{height:100%;width:0;background:#2fc36b}
+@media(max-width:800px){#app{grid-template-columns:1fr;grid-template-rows:60vh 40vh}#side{border-left:0;border-top:3px solid #26406a}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+</head>
+<body>
+<div id="app">
+ <div id="stage">
+  <canvas id="gl"></canvas>
+  <div id="hud">
+   <div id="stars"><svg width="30" height="30" viewBox="0 0 24 24"><path fill="#ffd23f" stroke="#b57b00" stroke-width="1.2" d="M12 2l3 6.6 7.2.8-5.4 4.8 1.6 7.1L12 17.6 5.6 21.3l1.6-7.1L1.8 9.4 9 8.6z"/></svg><span id="starn">0</span></div>
+   <div id="lvl"><div id="lvlt">Рівень 1</div><div id="bar"><div id="barf"></div></div></div>
+   <div id="hint"></div>
+  </div>
+  <button id="pausebtn" class="alt" style="display:none">Пауза</button>
+  <div id="banner"></div>
+
+  <div id="menu" class="ov show">
+   <div class="card">
+    <h1>BODY RUNNER 3D</h1>
+    <p>Біжи, стрибай та перемагай перешкоди власним тілом!</p>
+    <p style="margin-top:14px"><b>Смуги</b></p>
+    <div class="row" style="justify-content:center"><button id="l2" class="alt">2 смуги</button><button id="l3" class="alt sel">3 смуги</button></div>
+    <p style="margin-top:12px"><b>Поза гравця</b></p>
+    <div class="row" style="justify-content:center"><button id="p1" class="alt sel">Стоячи</button><button id="p2" class="alt">Сидячи</button></div>
+    <p id="posenote" class="note"></p>
+    <p style="margin-top:12px"><b>Режим</b></p>
+    <div class="row" style="justify-content:center"><button id="m1" class="alt sel">Без програшу</button><button id="m2" class="alt">Вільний біг</button></div>
+    <p style="margin-top:12px"><b>Костюм</b> <span class="note" id="suitnote"></span></p>
+    <div class="row" style="justify-content:center" id="suits"></div>
+    <div class="row" style="justify-content:center;margin-top:16px"><button id="tutbtn" class="alt">Навчання</button><button id="play" class="go">ГРАТИ</button></div>
+    <p class="note">Персонаж: Хлопець · Карта: Чарівна залізниця. Решта персонажів і карт — наступний етап.<br>Без камери (тест): стрілки ←/→, пробіл або ↑ — стрибок, ↓ — присісти, F — удар.</p>
+   </div>
+  </div>
+
+  <div id="calib" class="ov"><div class="card"><h2>Калібрування</h2><p id="calt">Стань посеред кадру так, щоб було видно тіло до колін.</p><div id="cprog"><div id="cprogf"></div></div><div class="row" style="justify-content:center;margin-top:10px"><button id="calcancel" class="alt">Скасувати</button></div></div></div>
+  <div id="lost" class="ov"><div class="card"><h2>Не бачу тебе</h2><p>Стань у кадр — гра почекає та продовжиться з того самого місця.</p></div></div>
+  <div id="pause" class="ov"><div class="card"><h2>Пауза</h2><div class="row" style="justify-content:center"><button id="resume" class="go">Продовжити</button><button id="tomenu" class="alt">У меню</button></div></div></div>
+  <div id="tut"><div id="tutt"></div><div class="dots" id="tutd"></div><button id="tutexit" class="alt">Вийти з навчання</button></div>
+ </div>
+
+ <aside id="side">
+  <h3>КАМЕРА · все локально, відео не зберігається</h3>
+  <div id="vwrap"><video id="cam" playsinline muted></video><canvas id="skel"></canvas><div id="vph">Камера вимкнена</div></div>
+  <div class="row"><button id="camBtn">Увімкнути камеру</button><button id="calBtn" class="alt" disabled>Калібрування</button></div>
+  <div id="status"><span id="dot"></span><span id="stext">Камера вимкнена</span></div>
+  <div id="action">WAITING</div>
+  <div class="legend"><span><i style="background:#2fe06b"></i>добре</span><span><i style="background:#ffd23f"></i>невпевнено</span><span><i style="background:#ff4b4b"></i>не знайдено</span></div>
+  <label class="sl">Чутливість рухів <input id="sens" type="range" min="0.5" max="1.6" step="0.05" value="1"></label>
+  <label class="sl">Згладжування <input id="smooth" type="range" min="0" max="0.85" step="0.05" value="0.45"></label>
+  <label class="sl">Гучність <input id="vol" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+  <label class="note"><input id="music" type="checkbox" checked> Музика</label>
+  <div class="note">Стоячи: нахил/крок убік — смуга; справжній стрибок; присідання; мах рукою вперед — удар. Сидячи: нахил корпусу; обидві руки вгору; пригнутися; рука вперед.</div>
+ </aside>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ================= utils ================= */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const now=()=>performance.now()/1000;
+const ema=(p,v,a)=>p==null?v:p+(v-p)*a;
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const S={seated:false,lanes:3,mode:'nolose',sens:1,smooth:0.45,volume:0.7,music:true};
+const input={laneIdx:1,camCrouch:false,kbdCrouch:false,get crouch(){return this.camCrouch||this.kbdCrouch},jumpTs:-9,punchQ:[],flash:'',flashT:0,side:0};
+let state='menu',prevState='menu',afterCalib=null;
+let totalStars=+(localStorage.getItem('br_stars')||0),suit=+(localStorage.getItem('br_suit')||0);
+const SUITS=[{c:0x2f8cff,need:0,n:'синій'},{c:0xe8453c,need:25,n:'червоний'},{c:0x2fc36b,need:60,n:'зелений'},{c:0xffc21a,need:120,n:'золотий'}];
+
+/* ================= audio ================= */
+const AU={ctx:null,step:0,next:0};
+function audioInit(){
+  if(AU.ctx){AU.ctx.resume&&AU.ctx.resume();return}
+  const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+  AU.ctx=new C();AU.master=AU.ctx.createGain();AU.master.gain.value=S.volume;AU.master.connect(AU.ctx.destination);
+  AU.music=AU.ctx.createGain();AU.music.gain.value=S.music?0.32:0;AU.music.connect(AU.master);
+  AU.sfx=AU.ctx.createGain();AU.sfx.gain.value=0.9;AU.sfx.connect(AU.master);
+  AU.next=AU.ctx.currentTime+0.1;setInterval(musicTick,120);
+}
+function tone(f0,f1,dur,type='sine',vol=.3,delay=0,dest){
+  if(!AU.ctx)return;const c=AU.ctx,t=c.currentTime+delay,o=c.createOscillator(),g=c.createGain();
+  o.type=type;o.frequency.setValueAtTime(f0,t);if(f1!==f0)o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t+dur);
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.015);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g);g.connect(dest||AU.sfx);o.start(t);o.stop(t+dur+0.05);
+}
+function noise(dur,vol=.3,freq=1200,delay=0){
+  if(!AU.ctx)return;const c=AU.ctx,n=Math.floor(c.sampleRate*dur),b=c.createBuffer(1,n,c.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
+  const s=c.createBufferSource();s.buffer=b;const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=freq;
+  const g=c.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(AU.sfx);s.start(c.currentTime+delay);
+}
+const sfx={
+  jump:()=>tone(300,720,.18,'triangle',.25),land:()=>tone(170,70,.12,'sine',.3),
+  star:()=>{tone(880,1320,.12,'sine',.2);tone(1320,1760,.14,'sine',.16,.07)},
+  punch:()=>{noise(.12,.35,900);tone(220,90,.12,'square',.1)},crate:()=>{noise(.4,.5,500);tone(120,50,.3,'sawtooth',.12)},
+  ok:()=>[523,659,784,1047].forEach((f,i)=>tone(f,f,.2,'triangle',.2,i*.07)),swoosh:()=>noise(.15,.15,2500),
+  duck:()=>tone(400,200,.15,'triangle',.18)
+};
+const CH_=[[261.6,329.6,392],[220,261.6,329.6],[174.6,220,261.6],[196,246.9,293.7]],PENT=[523,587,659,784,880,1046];
+function musicTick(){
+  if(!AU.ctx)return;
+  while(AU.next<AU.ctx.currentTime+0.4){
+    const st=AU.step++,ch=CH_[Math.floor(st/8)%4],pat=[0,1,2,1,0,2,1,2];
+    const f=ch[pat[st%8]]*(st%8>=4?2:1)*1;
+    const t=AU.next-AU.ctx.currentTime;
+    tone(f,f,.28,'triangle',.5,Math.max(0,t),AU.music);
+    if(st%8===0)tone(ch[0]/2,ch[0]/2,.9,'sine',.6,Math.max(0,t),AU.music);
+    if(Math.random()<.3)tone(PENT[Math.floor(Math.random()*PENT.length)],0+PENT[0],.2,'sine',.22,Math.max(0,t)+.11,AU.music);
+    AU.next+=0.24;
+  }
+}
+
+/* ================= actions / input bus ================= */
+const laneCount=()=>S.lanes;
+function flash(txt){input.flash=txt;input.flashT=now()}
+const TUT=[{k:'left',t:'Нахились ліворуч',n:1},{k:'right',t:'Нахились праворуч',n:1},{k:'jump',t:'Підстрибни 3 рази',ts:'Підніми обидві руки вгору 3 рази',n:3},{k:'crouch',t:'Присядь',ts:'Пригнись уперед',n:1},{k:'punch',t:'Махни руками вперед 3 рази',n:3}];
+let tut=null;
+function emit(type){
+  const t=now();
+  if(type==='jump'){input.jumpTs=t;flash('JUMP');audioInit&&sfx.jump()}
+  if(type==='punch'){input.punchQ.push(t);P.punchT=t;P.punchArm=1-P.punchArm;flash('PUNCH');sfx.punch()}
+  if(type==='crouch'){sfx.duck()}
+  if(tut&&state==='tutorial'){
+    const s=TUT[tut.step];
+    if(s&&s.k===type){tut.c++;if(tut.c>=s.n){tut.step++;tut.c=0;sfx.ok();}tutUI()}
+  }
+}
+function setLane(idx){
+  idx=clamp(idx,0,laneCount()-1);
+  if(idx===input.laneIdx)return;
+  const old=input.laneIdx;input.laneIdx=idx;sfx.swoosh();
+  emit(idx<old?'left':'right');
+}
+
+/* ================= pose tracker ================= */
+const MODEL_URL='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const tr={on:false,starting:false,pl:null,video:$('cam'),calibrated:false,base:null,lastPose:-9,found:false,lm:null,
+  hipYj:null,shYs:null,prevUp:null,vS:0,airborne:false,peak:0,minSince:0,airT:0,landT:-9,cx:null,side:0,off:0,crouchSince:-1,crouching:false,
+  pw:{},punchCd:0,calib:null,lastVT:-1,lastT:0};
+function setStatus(txt,col){$('stext').textContent=txt;$('dot').style.background=col==='g'?'#2fe06b':col==='y'?'#ffd23f':'#e04b4b'}
+function camErr(e){
+  const n=e&&e.name;
+  if(n==='NotAllowedError'||n==='SecurityError')return'Доступ до камери заборонено. Натисніть значок камери в адресному рядку, дозвольте доступ і спробуйте ще раз.';
+  if(n==='NotFoundError'||n==='DevicesNotFoundError')return'Камеру не знайдено. Підключіть вебкамеру.';
+  if(n==='NotReadableError'||n==='AbortError')return'Камеру зайняла інша програма (Zoom, Teams…). Закрийте її та спробуйте ще раз.';
+  return(e&&e.message)||String(e);
+}
+async function startCamera(){
+  if(tr.on||tr.starting)return;tr.starting=true;audioInit();
+  $('camBtn').disabled=true;setStatus('Запит доступу до камери…','y');
+  try{
+    if(!tr.video.srcObject){
+      if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
+        throw new Error('Браузер блокує камеру на цій адресі. Відкрийте гру через http://localhost (python3 -m http.server) або https, а не через file:// чи вбудований перегляд.');
+      let stream;
+      try{stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'},audio:false})}
+      catch(e){if(e.name==='OverconstrainedError'||e.name==='NotFoundError')stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});else throw e}
+      tr.video.srcObject=stream;
+    }
+    tr.video.muted=true;await tr.video.play();$('vph').style.display='none';
+  }catch(e){
+    console.error(e);setStatus(camErr(e),'r');$('vph').textContent=camErr(e);stopCamera(true);tr.starting=false;return;
+  }
+  try{
+    setStatus('Камера працює. Завантаження моделі розпізнавання…','y');
+    const mp=await loadMP();
+    const fs=await mp.FilesetResolver.forVisionTasks(mp.base+'/wasm');
+    const make=d=>mp.PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MODEL_URL,delegate:d},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
+    try{tr.pl=await make('GPU')}catch(e){console.warn('GPU delegate failed',e);tr.pl=await make('CPU')}
+    tr.on=true;tr.calibrated=false;$('camBtn').textContent='Вимкнути камеру';$('camBtn').disabled=false;$('calBtn').disabled=false;
+    setStatus('Тіло не знайдено — стань у кадр','r');
+  }catch(e){
+    console.error(e);setStatus('Камера є, але модель не завантажилась ('+((e&&e.message)||e)+'). Перевірте інтернет і натисніть «Повторити».','r');
+    $('camBtn').textContent='Повторити';$('camBtn').disabled=false;
+  }
+  tr.starting=false;
+}
+async function loadMP(){
+  const bases=['https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14','https://unpkg.com/@mediapipe/tasks-vision@0.10.14'];
+  let err;for(const b of bases){try{const m=await import(b+'/vision_bundle.mjs');return{FilesetResolver:m.FilesetResolver,PoseLandmarker:m.PoseLandmarker,base:b}}catch(e){err=e;console.warn('MediaPipe CDN failed',b,e)}}
+  throw err;
+}
+function stopCamera(keepMsg){
+  const s=tr.video.srcObject;if(s)s.getTracks().forEach(t=>t.stop());tr.video.srcObject=null;
+  if(tr.pl){try{tr.pl.close()}catch(e){}tr.pl=null}
+  tr.on=false;tr.calibrated=false;tr.base=null;tr.found=false;input.camCrouch=false;
+  $('vph').style.display='flex';$('camBtn').textContent='Увімкнути камеру';$('camBtn').disabled=false;$('calBtn').disabled=true;
+  const c=$('skel').getContext('2d');c.clearRect(0,0,$('skel').width,$('skel').height);
+  if(!keepMsg)setStatus('Камера вимкнена','r');
+}
+const BONES=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,31],[28,32],[0,11],[0,12]];
+const JOINTS=[0,11,12,13,14,15,16,23,24,25,26,27,28,31,32];
+function colorFor(l){const v=l.visibility??0;return v>0.65?'#2fe06b':v>0.3?'#ffd23f':'#ff4b4b'}
+function drawSkeleton(lm){
+  const cv=$('skel'),v=tr.video;if(cv.width!==v.videoWidth){cv.width=v.videoWidth||640;cv.height=v.videoHeight||480}
+  const c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);if(!lm)return;
+  c.lineWidth=4;c.lineCap='round';
+  for(const[a,b]of BONES){const A=lm[a],B=lm[b];c.strokeStyle=colorFor((A.visibility??0)<(B.visibility??0)?A:B);c.beginPath();c.moveTo(A.x*cv.width,A.y*cv.height);c.lineTo(B.x*cv.width,B.y*cv.height);c.stroke()}
+  for(const i of JOINTS){const p=lm[i];c.fillStyle=colorFor(p);c.beginPath();c.arc(p.x*cv.width,p.y*cv.height,i===0?9:6,0,6.3);c.fill()}
+}
+function trackerUpdate(){
+  if(!tr.on||!tr.pl||tr.video.readyState<2||tr.video.currentTime===tr.lastVT)return;
+  tr.lastVT=tr.video.currentTime;
+  let res;try{res=tr.pl.detectForVideo(tr.video,performance.now())}catch(e){return}
+  const lm=res&&res.landmarks&&res.landmarks[0];
+  if(!lm){tr.found=false;drawSkeleton(null);if(now()-tr.lastPose>0.4)setStatus('Тіло не знайдено — стань у кадр','r');return}
+  drawSkeleton(lm);processPose(lm,now());
+}
+function processPose(lm,t){
+  const dt=clamp(t-tr.lastT,0.016,0.1);tr.lastT=t;
+  const conf=Math.min(...(S.seated?[11,12]:[11,12,23,24]).map(i=>lm[i].visibility??0));
+  if(conf<0.45){tr.found=false;setStatus('Невпевнене розпізнавання','y');return}
+  tr.found=true;tr.lastPose=t;setStatus(tr.calibrated?'Тіло знайдено · керування активне':'Тіло знайдено · потрібне калібрування','g');
+  const a=clamp(1-S.smooth,0.12,1);
+  if(tr.calib&&tr.calib.active){calibStep(lm,t);return}
+  if(!tr.base)return;
+  detect(lm,t,dt,a);
+}
+function measure(lm){
+  if(S.seated){const W=Math.max(0.05,Math.abs(lm[11].x-lm[12].x));return{shY:(lm[11].y+lm[12].y)/2,noseY:lm[0].y,cx:1-(lm[11].x+lm[12].x)/2,W0:W,L0:W*1.3,hipY:0,ankY:null}}
+  const sy=(lm[11].y+lm[12].y)/2,hy=(lm[23].y+lm[24].y)/2;
+  const ok=[27,28].every(i=>(lm[i].visibility??0)>0.5&&lm[i].y<0.99);
+  return{hipY:hy,shY:sy,cx:1-(lm[11].x+lm[12].x+lm[23].x+lm[24].x)/4,L0:Math.max(0.08,hy-sy),W0:Math.max(0.05,Math.abs(lm[11].x-lm[12].x)),ankY:ok?(lm[27].y+lm[28].y)/2:null};
+}
+function startCalibration(cb){
+  if(!tr.on)return;afterCalib=cb||null;tr.calib={active:true,okSince:null,samples:[]};
+  resetDetect();$('calt').textContent=S.seated?'Сядь прямо: у кадрі мають бути голова, плечі та руки.':'Стань посеред кадру так, щоб було видно тіло до колін.';
+  if(state!=='calib')prevState=state;setState('calib');$('cprogf').style.width='0%';
+}
+function calibStep(lm,t){
+  const c=tr.calib,ok=S.seated?[0,11,12].every(i=>(lm[i].visibility??0)>0.5):([11,12,23,24,25,26].every(i=>(lm[i].visibility??0)>0.5)&&lm[25].y<0.99&&lm[26].y<0.99);
+  if(!ok){c.okSince=null;c.samples=[];$('calt').textContent=S.seated?'Сядь прямо: у кадрі мають бути голова, плечі та руки.':'Покажи тіло до колін: відступи від камери на крок.';$('cprogf').style.width='0%';return}
+  if(c.okSince==null)c.okSince=t;const el=t-c.okSince;
+  if(el<1.2){$('calt').textContent='Чудово! Стій рівно, дивись у екран…';$('cprogf').style.width=(el/2*100)+'%';return}
+  c.samples.push(measure(lm));$('calt').textContent='Ще трохи… не рухайся';$('cprogf').style.width=(el/2*100)+'%';
+  if(el>=2){
+    const s=c.samples,avg=k=>s.reduce((x,m)=>x+m[k],0)/s.length;
+    const withA=s.filter(m=>m.ankY!=null);
+    tr.base={seated:S.seated,noseY:s[0].noseY==null?0:avg('noseY'),hipY:avg('hipY'),shY:avg('shY'),cx:avg('cx'),L0:avg('L0'),W0:avg('W0'),ankY:withA.length>s.length*0.6?withA.reduce((x,m)=>x+m.ankY,0)/withA.length:null};
+    tr.calib.active=false;tr.calibrated=true;tr.side=S.lanes===3?0:-1;tr.cx=null;tr.hipYj=null;tr.prevUp=null;
+    sfx.ok();const cb=afterCalib;afterCalib=null;
+    if(cb)cb();else setState(prevState==='calib'?'menu':prevState);
+  }
+}
+function resetDetect(){tr.hipYj=tr.shYs=tr.noseS=tr.prevUp=tr.cx=null;tr.vS=0;tr.airborne=false;tr.crouching=false;tr.crouchSince=-1;tr.pw={};input.camCrouch=false}
+/* ---- режим «сидячи»: плечі, голова, руки (таз і ноги не потрібні) ---- */
+function detectSeated(lm,t,dt,a){
+  const b=tr.base,k=1/S.sens,shY=(lm[11].y+lm[12].y)/2,wv=i=>(lm[i].visibility??0)>0.4;
+  tr.shYs=ema(tr.shYs,shY,Math.max(a,0.5));tr.noseS=ema(tr.noseS,lm[0].y,Math.max(a,0.5));
+  const up=(b.shY-tr.shYs)/b.W0;
+  const rawV=tr.prevUp==null?0:(up-tr.prevUp)/dt;tr.prevUp=up;tr.vS=ema(tr.vS,rawV,0.5);const v=tr.vS;
+  /* стрибок: обидві руки вгору над головою (або різкий підйом плечей); наступний — після опускання рук */
+  const handsUp=wv(15)&&wv(16)&&lm[15].y<lm[0].y&&lm[16].y<lm[0].y;
+  const handsDown=!(wv(15)&&lm[15].y<shY)&&!(wv(16)&&lm[16].y<shY);
+  const rise=up>0.28*k&&v>0.9;
+  if(!tr.airborne){if(!tr.crouching&&t-tr.landT>0.12&&(handsUp||rise)){tr.airborne=true;tr.airT=t;emit('jump')}}
+  else if((handsDown&&up<0.12*k)||t-tr.airT>1.6){tr.airborne=false;tr.landT=t}
+  /* присідання = пригнутися вперед/вниз */
+  const dn=(tr.noseS-b.noseY)/b.W0,sd=(tr.shYs-b.shY)/b.W0;
+  if(!tr.airborne){
+    if(!tr.crouching){if(dn>0.38*k&&sd>0.12*k){if(tr.crouchSince<0)tr.crouchSince=t;if(t-tr.crouchSince>0.1){tr.crouching=true;emit('crouch')}}else tr.crouchSince=-1}
+    else if(dn<0.2*k)tr.crouching=false;
+  }else{tr.crouching=false;tr.crouchSince=-1}
+  input.camCrouch=tr.crouching;
+  if(!tr.airborne&&!tr.crouching&&Math.abs(v)<0.3&&Math.abs(up)<0.15){b.shY=lerp(b.shY,tr.shYs,0.02);b.noseY=lerp(b.noseY,tr.noseS,0.02)}
+  /* смуги: нахил корпусу */
+  tr.cx=ema(tr.cx,1-(lm[11].x+lm[12].x)/2,a);const off=(tr.cx-b.cx)/b.W0;tr.off=off;
+  if(S.lanes===3){
+    const en=0.45*k,ex=0.22*k;
+    if(tr.side<=0&&off>en)tr.side=1;else if(tr.side>=0&&off<-en)tr.side=-1;
+    else if(tr.side===1&&off<ex)tr.side=0;else if(tr.side===-1&&off>-ex)tr.side=0;
+    setLane(tr.side+1);
+  }else{const en=0.15*k;if(off>en)tr.side=1;else if(off<-en)tr.side=-1;setLane(tr.side>0?1:0)}
+  /* удар: рука вперед до камери */
+  for(const[w,s2]of[[15,11],[16,12]]){
+    const wr=lm[w],sh=lm[s2];if(!wv(w))continue;
+    const depth=sh.z-wr.z,ext=Math.hypot(wr.x-sh.x,wr.y-sh.y)/b.L0,p=tr.pw[w];
+    if(p){
+      const dD=(depth-p.depth)/dt,dE=(ext-p.ext)/dt,sp=Math.hypot(wr.x-p.x,wr.y-p.y)/b.L0/dt;
+      if(sp<1.4&&dD<1.0)p.armed=true;
+      if(p.armed&&t>tr.punchCd&&!tr.airborne&&!tr.crouching&&wr.y>lm[0].y&&(dD>1.5*k||dE>2.4*k)){tr.punchCd=t+0.3;p.armed=false;emit('punch')}
+      p.depth=depth;p.ext=ext;p.x=wr.x;p.y=wr.y;
+    }else tr.pw[w]={depth,ext,x:wr.x,y:wr.y,armed:true};
+  }
+}
+function detect(lm,t,dt,a){
+  if(tr.base.seated){detectSeated(lm,t,dt,a);return}
+  const b=tr.base,k=1/S.sens;
+  const hipY=(lm[23].y+lm[24].y)/2,shY=(lm[11].y+lm[12].y)/2;
+  tr.hipYj=ema(tr.hipYj,hipY,Math.max(a,0.55));tr.shYs=ema(tr.shYs,shY,Math.max(a,0.5));
+  const up=(b.hipY-tr.hipYj)/b.L0;
+  const rawV=tr.prevUp==null?0:(up-tr.prevUp)/dt;tr.prevUp=up;tr.vS=ema(tr.vS,rawV,0.5);const v=tr.vS;
+  let ankUp=null,ankY=null;
+  if(b.ankY!=null&&(lm[27].visibility??0)>0.5&&(lm[28].visibility??0)>0.5){ankY=(lm[27].y+lm[28].y)/2;ankUp=(b.ankY-ankY)/b.L0}
+  const thrJ=0.22*k,landThr=0.09*k;
+  /* --- прыжок: старт / повітря / приземлення + повторний стрибок без чистого приземлення --- */
+  if(!tr.airborne){
+    if(!tr.crouching&&t-tr.landT>0.06&&up>thrJ&&(v>0.8||up>thrJ*1.6)&&(ankUp==null||ankUp>thrJ*0.35)){
+      tr.airborne=true;tr.peak=up;tr.minSince=up;tr.airT=t;emit('jump');
+    }
+  }else{
+    tr.peak=Math.max(tr.peak,up);if(up<tr.minSince)tr.minSince=up;
+    if(tr.peak-tr.minSince>0.12*k&&up-tr.minSince>0.15*k&&v>0.8&&tr.minSince<thrJ*0.85){
+      emit('jump');tr.peak=up;tr.minSince=up;tr.airT=t;                 // наступний стрибок підряд
+    }else if(up<landThr||t-tr.airT>1.4||(v<-0.6&&up<tr.peak*0.45&&up<thrJ*0.8)){
+      tr.airborne=false;tr.landT=t;
+    }
+  }
+  /* --- присідання --- */
+  const shDown=(tr.shYs-b.shY)/b.L0,hipDown=-up,cThr=0.30*k;
+  if(!tr.airborne){
+    if(!tr.crouching){
+      if(hipDown>cThr&&shDown>cThr*0.75){if(tr.crouchSince<0)tr.crouchSince=t;if(t-tr.crouchSince>0.1){tr.crouching=true;emit('crouch')}}
+      else tr.crouchSince=-1;
+    }else if(hipDown<cThr*0.5)tr.crouching=false;
+  }else{tr.crouching=false;tr.crouchSince=-1}
+  input.camCrouch=tr.crouching;
+  /* --- повільна адаптація базової лінії (дрейф камери / крок) --- */
+  if(!tr.airborne&&!tr.crouching&&Math.abs(v)<0.35&&up>-0.15&&up<0.12){
+    b.hipY=lerp(b.hipY,tr.hipYj,0.02);b.shY=lerp(b.shY,tr.shYs,0.02);if(ankY!=null&&b.ankY!=null)b.ankY=lerp(b.ankY,ankY,0.02);
+  }
+  /* --- смуги --- */
+  const cxRaw=1-(lm[11].x+lm[12].x+lm[23].x+lm[24].x)/4;tr.cx=ema(tr.cx,cxRaw,a);
+  const off=(tr.cx-b.cx)/b.W0;tr.off=off;
+  if(S.lanes===3){
+    const en=0.55*k,ex=0.30*k;
+    if(tr.side<=0&&off>en)tr.side=1;else if(tr.side>=0&&off<-en)tr.side=-1;
+    else if(tr.side===1&&off<ex)tr.side=0;else if(tr.side===-1&&off>-ex)tr.side=0;
+    setLane(tr.side+1);
+  }else{
+    const en=0.18*k;if(off>en)tr.side=1;else if(off<-en)tr.side=-1;
+    setLane(tr.side>0?1:0);
+  }
+  /* --- удар --- */
+  for(const[w,s]of[[15,11],[16,12]]){
+    const wr=lm[w],sh=lm[s];if((wr.visibility??0)<0.4)continue;
+    const depth=sh.z-wr.z,ext=Math.hypot(wr.x-sh.x,wr.y-sh.y)/b.L0,p=tr.pw[w];
+    if(p){
+      const dD=(depth-p.depth)/dt,dE=(ext-p.ext)/dt,sp=Math.hypot(wr.x-p.x,wr.y-p.y)/b.L0/dt;
+      if(sp<1.4&&dD<1.0)p.armed=true;
+      const inFront=wr.y>lm[0].y-0.05&&wr.y<hipY+0.05;
+      if(p.armed&&t>tr.punchCd&&!tr.airborne&&!tr.crouching&&inFront&&(dD>1.5*k||dE>2.4*k||sp>4.2*k)){
+        tr.punchCd=t+0.3;p.armed=false;emit('punch');
+      }
+      p.depth=depth;p.ext=ext;p.x=wr.x;p.y=wr.y;
+    }else tr.pw[w]={depth,ext,x:wr.x,y:wr.y,armed:true};
+  }
+}
+
+/* ================= three.js base ================= */
+const stage=$('stage'),canvas=$('gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+const scene=new THREE.Scene();
+scene.fog=new THREE.Fog(0xcdeaff,55,230);
+const camera=new THREE.PerspectiveCamera(58,1,0.1,900);
+const hemi=new THREE.HemisphereLight(0xffffff,0x77a860,1.0);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xfff1d0,2.4);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:1,far:110});sun.shadow.bias=-0.0006;sun.shadow.normalBias=0.04;
+scene.add(sun,sun.target);
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+new ResizeObserver(resize).observe(stage);resize();
+
+/* небо */
+const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,uniforms:{top:{value:new THREE.Color(0x4aa8ff)},bot:{value:new THREE.Color(0xcdeaff)}},
+ vertexShader:'varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+ fragmentShader:'uniform vec3 top;uniform vec3 bot;varying vec3 vP;void main(){float h=clamp(vP.y*1.5+0.08,0.,1.);gl_FragColor=vec4(mix(bot,top,pow(h,0.7)),1.);\n#include <colorspace_fragment>\n}'});
+const sky=new THREE.Mesh(new THREE.SphereGeometry(600,24,16),skyMat);sky.renderOrder=-10;sky.frustumCulled=false;scene.add(sky);
+const PAL=[{top:0x4aa8ff,bot:0xd2ecff,sun:0xfff1d0},{top:0xff7a5c,bot:0xffd7a6,sun:0xffc98a},{top:0x6b5cff,bot:0xe9d8ff,sun:0xe5d7ff}];
+const palCur={top:new THREE.Color(PAL[0].top),bot:new THREE.Color(PAL[0].bot),sun:new THREE.Color(PAL[0].sun)};let palIdx=0;
+
+/* матеріали та геометрії */
+const mat=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.7,metalness:.04},o));
+const pmc=new Map();const pm=c=>{if(!pmc.has(c))pmc.set(c,mat(c));return pmc.get(c)};
+const M={grass:mat(0x6cc04a,{roughness:1}),ballast:mat(0x8e8a84,{roughness:1}),sleeper:mat(0x6b4425),rail:mat(0xc9d1d8,{metalness:.7,roughness:.35}),
+ trunk:mat(0x7a4a28),pine:mat(0x2f9a55),leaf:mat(0x58c24a),leaf2:mat(0x86d44a),white:mat(0xffffff),red:mat(0xe8453c),dark:mat(0x25303d),glass:mat(0x7fd0ff,{metalness:.3,roughness:.15}),
+ wood:mat(0xc58a4a),wood2:mat(0xa86f35),stone:mat(0xb9b2a6),yellow:mat(0xffc21a),roof:mat(0xd9503f),hill:mat(0x5db24a,{roughness:1}),rock:mat(0x9ea6b4,{roughness:.9,flatShading:true}),snow:mat(0xffffff,{roughness:.6})};
+const G={box:new THREE.BoxGeometry(1,1,1),cyl:new THREE.CylinderGeometry(1,1,1,16),cone:new THREE.ConeGeometry(1,1,10),sph:new THREE.SphereGeometry(1,14,10),ico:new THREE.IcosahedronGeometry(1,1)};
+function mesh(g,m,x=0,y=0,z=0,sx=1,sy=1,sz=1,sh=false){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);if(sh){o.castShadow=true;o.receiveShadow=true}return o}
+const box=(m,x,y,z,w,h,d,sh)=>mesh(G.box,m,x,y,z,w,h,d,sh);
+
+/* ================= персонаж (хлопець) ================= */
+function buildBoy(shirtColor){
+  const root=new THREE.Group(),body=new THREE.Group();root.add(body);
+  const skin=mat(0xffd0a6,{roughness:.55}),shirt=mat(shirtColor,{roughness:.6}),pants=mat(0x3b4f8a),shoe=mat(0xffffff),hair=mat(0x5a3418,{roughness:.8}),black=mat(0x111111,{roughness:.3});
+  const cap=(r,l,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.CapsuleGeometry(r,l,6,14),m);o.position.set(x,y,z);o.castShadow=true;return o};
+  const torso=new THREE.Group();torso.position.y=0.86;body.add(torso);
+  torso.add(cap(0.25,0.28,shirt,0,0.33,0));
+  const belt=mesh(G.cyl,pants,0,0.06,0,0.255,0.12,0.22);torso.add(belt);
+  const pack=new THREE.Group();pack.position.set(0,0.35,0.3);pack.add(box(mat(0xff8a3d),0,0,0,0.38,0.46,0.2,true),box(mat(0xe06a1a),0,-0.1,0.11,0.26,0.16,0.06,true));torso.add(pack);
+  const head=new THREE.Group();head.position.set(0,0.95,0);torso.add(head);
+  const hs=mesh(G.sph,skin,0,0,0,0.3,0.3,0.3,true);head.add(hs);
+  const hc=new THREE.Mesh(new THREE.SphereGeometry(0.32,24,14,0,Math.PI*2,0,Math.PI*0.56),hair);hc.rotation.x=0.38;hc.position.set(0,0.015,0.01);hc.castShadow=true;head.add(hc);
+  head.add(mesh(G.sph,hair,0,0.3,-0.12,0.13,0.1,0.14));
+  for(const sx of[-1,1]){head.add(mesh(G.sph,black,sx*0.115,0.0,-0.27,0.045,0.06,0.03));head.add(mesh(G.sph,M.white,sx*0.12,0.025,-0.295,0.014,0.014,0.01));
+    head.add(mesh(G.sph,skin,sx*0.3,-0.02,0,0.06,0.08,0.05));head.add(mesh(G.sph,mat(0xff9a9a),sx*0.17,-0.09,-0.25,0.06,0.04,0.02));}
+  head.add(mesh(G.sph,skin,0,-0.04,-0.3,0.04,0.035,0.035));
+  const sm=new THREE.Mesh(new THREE.TorusGeometry(0.07,0.014,8,16,Math.PI),black);sm.position.set(0,-0.13,-0.285);sm.rotation.z=Math.PI;head.add(sm);
+  const arm=(sx)=>{const p=new THREE.Group();p.position.set(sx*0.34,0.58,0);p.add(cap(0.085,0.18,skin,0,-0.28,0),cap(0.1,0.1,shirt,0,-0.07,0),mesh(G.sph,skin,0,-0.5,0,0.1,0.1,0.1,true));torso.add(p);return p};
+  const armL=arm(-1),armR=arm(1);
+  const leg=(sx)=>{const p=new THREE.Group();p.position.set(sx*0.14,0.86,0);p.add(cap(0.105,0.3,pants,0,-0.2,0),cap(0.09,0.12,skin,0,-0.5,0),box(shoe,0,-0.74,-0.05,0.2,0.12,0.32,true),box(mat(0x2f8cff),0,-0.7,-0.05,0.21,0.04,0.33));body.add(p);return p};
+  const legL=leg(-1),legR=leg(1);
+  return{root,body,torso,head,armL,armR,legL,legR};
+}
+let char=null,P=null;
+function newPlayer(){return{s:0,x:0,y:0,levelY:0,vy:0,laneIdx:1,onTrain:false,trainLane:1,leap:null,hop:null,duck:0,waiting:false,waitFor:null,waitEv:null,arriveT:0,ei:0,
+  jumpSeen:-9,jumpUsed:-9,punchT:-9,punchArm:0,landT:-9,joyT:-9,speed:0,runPh:0,done:0,stars:0,assist:0,fast:0,canRun:false,zoneBlocked:null,level:1}}
+P=newPlayer();
+function buildChar(){if(char)scene.remove(char.root);char=buildBoy(SUITS[suit].c);scene.add(char.root)}
+
+/* ================= світ: «Чарівна залізниця» ================= */
+const world=new THREE.Group();scene.add(world);
+const CH=40,BASE=9,ROOF=3.0;
+let laneX=[-2.6,0,2.6],span=8.4,chunks=new Map(),events=[],stars=[],genS=34,patN=0,fx=[],gcache={};
+const starGeo=(()=>{const sh=new THREE.Shape();for(let i=0;i<10;i++){const r=i%2?0.22:0.5,a=i/10*Math.PI*2+Math.PI/2;i?sh.lineTo(Math.cos(a)*r,Math.sin(a)*r):sh.moveTo(Math.cos(a)*r,Math.sin(a)*r)}sh.closePath();return new THREE.ExtrudeGeometry(sh,{depth:0.14,bevelEnabled:true,bevelSize:0.05,bevelThickness:0.05,bevelSegments:2}).translate(0,0,-0.07)})();
+const starMat=new THREE.MeshStandardMaterial({color:0xffd23f,emissive:0xffa800,emissiveIntensity:.55,roughness:.3,metalness:.4});
+const sleeperG=new THREE.BoxGeometry(2.0,0.1,0.28),railG=new THREE.BoxGeometry(0.11,0.15,CH);
+function setLayout(){
+  laneX=S.lanes===3?[-2.6,0,2.6]:[-1.3,1.3];span=laneX[laneX.length-1]-laneX[0]+3.6;
+  gcache={ground:new THREE.PlaneGeometry(260,CH).rotateX(-Math.PI/2).translate(0,-0.03,-CH/2),ballast:new THREE.BoxGeometry(span,0.16,CH).translate(0,0.05,-CH/2)};
+}
+function addTree(g,x,z,r){
+  const t=new THREE.Group();t.position.set(x,0,z);const s=0.8+r()*0.9;
+  if(r()<0.5){t.add(mesh(G.cyl,M.trunk,0,0.8*s,0,0.22*s,1.6*s,0.22*s));for(let i=0;i<3;i++)t.add(mesh(G.cone,M.pine,0,(1.7+i*1.05)*s,0,(1.9-i*0.5)*s,1.7*s,(1.9-i*0.5)*s))}
+  else{t.add(mesh(G.cyl,M.trunk,0,1.0*s,0,0.25*s,2*s,0.25*s));t.add(mesh(G.ico,r()<.5?M.leaf:M.leaf2,0,2.8*s,0,1.5*s,1.35*s,1.5*s))}
+  t.rotation.y=r()*6;g.add(t);
+}
+function buildChunk(i){
+  const g=new THREE.Group();g.position.z=-i*CH;const r=rng(i*977+13);g.userData.spin=[];
+  const gr=new THREE.Mesh(gcache.ground,M.grass);gr.receiveShadow=true;g.add(gr);
+  const bl=new THREE.Mesh(gcache.ballast,M.ballast);bl.receiveShadow=true;g.add(bl);
+  const nS=Math.floor(CH/0.9),sl=new THREE.InstancedMesh(sleeperG,M.sleeper,nS*laneX.length),rl=new THREE.InstancedMesh(railG,M.rail,laneX.length*2),d=new THREE.Object3D();
+  let n=0,m=0;laneX.forEach(x=>{for(let k=0;k<nS;k++){d.position.set(x,0.17,-0.45-k*0.9);d.updateMatrix();sl.setMatrixAt(n++,d.matrix)}for(const o of[-0.7,0.7]){d.position.set(x+o,0.27,-CH/2);d.updateMatrix();rl.setMatrixAt(m++,d.matrix)}});
+  sl.receiveShadow=true;rl.castShadow=true;g.add(sl,rl);g.userData.inst=[sl,rl];
+  /* кущі / квіти */
+  const bush=new THREE.InstancedMesh(G.ico,mat(0xffffff),26);const col=new THREE.Color();
+  for(let k=0;k<26;k++){const sd=r()<.5?-1:1,x=sd*(span/2+1+r()*18),s=0.3+r()*0.5;d.position.set(x,s*0.6,-r()*CH);d.scale.set(s,s*.8,s);d.rotation.y=r()*6;d.updateMatrix();bush.setMatrixAt(k,d.matrix);
+    col.setHex([0x4fb542,0x6fcf55,0xff7aa8,0xffd23f,0xffffff][Math.floor(r()*5)]);bush.setColorAt(k,col)}
+  d.scale.set(1,1,1);d.rotation.set(0,0,0);g.add(bush);g.userData.inst.push(bush);
+  for(const sd of[-1,1]){
+    const cnt=3+Math.floor(r()*3);for(let k=0;k<cnt;k++)addTree(g,sd*(span/2+4+r()*26),-r()*CH,r);
+    /* пагорби */
+    if(r()<0.6){const h=mesh(G.sph,M.hill,sd*(48+r()*30),-3,-r()*CH,20+r()*10,12+r()*8,20+r()*10);g.add(h)}
+    /* телеграфні стовпи */
+    const px=sd*(span/2+2.2);g.add(mesh(G.cyl,M.trunk,px,3,-CH*0.3,0.12,6,0.12),box(M.trunk,px,5.4,-CH*0.3,0.14,0.14,1.6),box(M.trunk,px,4.9,-CH*0.3,0.14,0.14,1.1));
+  }
+  if(i%6===2){ /* вокзал */
+    const sd=r()<.5?-1:1,x=sd*(span/2+4.5),st=new THREE.Group();st.position.set(x,0,-CH/2);
+    st.add(box(M.stone,0,0.3,0,6,0.6,28,true));st.add(box(pm(0xf0e2c8),sd*4.2,2.2,0,5.2,4.4,12,true));st.add(mesh(G.cone,M.roof,sd*4.2,5.6,0,4.9,2.4,6.9).rotateY(Math.PI/4));
+    st.add(box(pm(0xe8453c),0,3.9,0,6.6,0.3,28,true));for(const z of[-12,-4,4,12])st.add(mesh(G.cyl,pm(0xffffff),-sd*2.6,2.2,z,0.15,3.4,0.15));
+    const clk=mesh(G.cyl,M.white,sd*1.5,3.6,0,0.7,0.12,0.7);clk.rotation.z=Math.PI/2;st.add(clk);
+    st.add(box(pm(0x2f7bff),sd*1.6,0.9,-5,2.4,0.5,0.8,true),box(pm(0xffc21a),sd*1.6,1.35,-5,2.4,0.12,0.9));
+    g.add(st);
+  }
+  if(i%7===4){ /* міст */
+    const b=new THREE.Group();b.position.z=-CH/2;const hs=span/2+5;
+    b.add(box(M.stone,0,9.4,0,hs*2+6,0.9,6,true));for(const sd of[-1,1]){b.add(box(M.stone,sd*(hs+1.5),4.7,0,3,9.4,6,true));b.add(box(pm(0xd0c8b8),sd*(hs+1.5),9.9,0,3,0.4,6.4));
+      for(let k=-2;k<=2;k++)b.add(mesh(G.cyl,M.white,sd*(hs-4)+k*0,10.4,k*1.2,0.07,1.0,0.07))}
+    b.add(box(M.red,0,10.45,-2.9,hs*2+6,0.15,0.15),box(M.red,0,10.45,2.9,hs*2+6,0.15,0.15));
+    for(const sd of[-1,1])for(const z of[-2.9,2.9]){b.add(mesh(G.sph,pm(0xfff3b0),sd*(hs+1.5),11.3,z,0.3,0.3,0.3))}
+    g.add(b);
+  }
+  if(i%5===0){ /* вітряк */
+    const sd=r()<.5?-1:1,w=new THREE.Group();w.position.set(sd*(40+r()*8),0,-CH*0.5);
+    w.add(mesh(G.cone,pm(0xf4efe4),0,5,0,2.4,10,2.4),mesh(G.cone,M.roof,0,10.3,0,2.8,2.0,2.8));
+    const bl=new THREE.Group();bl.position.set(0,9,-1.6);for(let k=0;k<4;k++){const a=new THREE.Group();a.rotation.z=k*Math.PI/2;a.add(box(M.wood,0,3.2,0,0.3,6,0.12),box(pm(0xffffff),0.6,3.6,0,1.0,4.4,0.1));bl.add(a)}
+    w.add(bl,mesh(G.sph,M.red,0,9,-1.2,0.5,0.5,0.5));w.rotation.y=sd>0?0.5:-0.5;g.add(w);g.userData.spin.push(bl);
+  }
+  world.add(g);chunks.set(i,g);
+}
+function updateChunks(){
+  const ci=Math.floor(P.s/CH);
+  for(let i=Math.max(0,ci-1);i<=ci+6;i++)if(!chunks.has(i))buildChunk(i);
+  for(const[i,g]of chunks)if(i<ci-1){world.remove(g);g.userData.inst.forEach(m=>m.dispose());chunks.delete(i)}
+}
+
+/* далекі гори, хмари, фоновий потяг */
+const far=new THREE.Group();scene.add(far);
+{const r=rng(5);for(let i=0;i<22;i++){const sd=i%2?1:-1,h=40+r()*70,w=40+r()*40,x=sd*(110+r()*120),z=-r()*460+60;far.add(mesh(G.cone,M.rock,x,h/2-5,z,w,h,w));far.add(mesh(G.cone,M.snow,x,h*0.82-5,z,w*0.36,h*0.36,w*0.36))}}
+const clouds=new THREE.Group();scene.add(clouds);
+{const r=rng(9);for(let i=0;i<14;i++){const c=new THREE.Group();for(let k=0;k<4;k++)c.add(mesh(G.sph,pm(0xffffff),k*3.2-4,r()*1.5,r()*3,3.4+r()*1.5,2.2+r(),3));c.position.set((r()-.5)*260,45+r()*30,-r()*500+80);c.userData.sp=0.6+r();clouds.add(c)}}
+function buildTrain(len,colors){
+  const t=new THREE.Group();
+  for(let k=0;k<len;k++){const c=colors[k%colors.length],cr=new THREE.Group();cr.position.z=-k*10;
+    cr.add(box(pm(c),0,1.7,-4,2.1,2.45,8,true),box(pm(0xffffff),0,3.05,-4,2.2,0.18,8.1),box(pm(0x2c3a4d),0,0.5,-4,1.5,0.3,6.2));
+    for(const sd of[-1,1]){cr.add(box(M.glass,sd*1.06,2.15,-4,0.05,0.8,6.4),box(pm(0xffffff),sd*1.07,1.25,-4,0.04,0.2,7.6));for(const z of[-1.5,-6.5])for(const o of[-0.5,0.5])cr.add(mesh(G.cyl,M.dark,sd*0.95,0.35,z+o,0.33,0.2,0.33).rotateZ(Math.PI/2))}
+    if(k<len-1)cr.add(mesh(G.cyl,M.dark,0,0.7,-9,0.1,2.4,0.1).rotateX(Math.PI/2));
+    t.add(cr)}
+  const nose=new THREE.Group();nose.position.z=-(len-1)*10-8;nose.add(box(pm(0x2c3a4d),0,1.7,-0.05,2.12,2.45,0.2),mesh(G.sph,pm(0xfff3b0),-0.55,1.3,-0.2,0.28,0.28,0.12),mesh(G.sph,pm(0xfff3b0),0.55,1.3,-0.2,0.28,0.28,0.12));t.add(nose);
+  return t;
+}
+const ambient=[];
+{const a=buildTrain(5,[0xe8453c,0xffc21a,0x2f8cff]);a.rotation.y=Math.PI;scene.add(a);ambient.push({g:a,x:-17,off:0});const b=buildTrain(6,[0x2fc36b,0xff8a3d,0x8a5cff]);scene.add(b);ambient.push({g:b,x:20,off:90})}
+
+/* ================= події (перешкоди) ================= */
+function mkStars(s,lane,n,arc){for(let i=0;i<n;i++){const m=new THREE.Mesh(starGeo,starMat);const y=(lane.y||1.2)+(arc?Math.sin(i/(n-1)*Math.PI)*arc:0);m.castShadow=true;m.position.set(laneX[lane.l],y,-(s+i*1.6));world.add(m);stars.push({m,s:s+i*1.6,l:lane.l,y,got:false,t:0})}}
+const rand=rng(Date.now()&0xffff);
+function addEvent(e){events.push(Object.assign({done:false},e))}
+function mkRow(fn,x0,x1,step){const g=new THREE.Group();for(let x=x0;x<=x1;x+=step)g.add(fn(x));return g}
+function addBarrier(s){
+  const g=new THREE.Group();g.position.z=-s;const w=span-1.2;
+  if(rand()<.5){for(const sd of[-1,1])g.add(box(M.red,sd*w/2,0.7,0,0.28,1.4,0.28,true));g.add(box(M.white,0,0.55,0,w,0.28,0.2,true),box(M.red,0,0.9,0,w,0.28,0.2,true));for(let x=-w/2+0.4;x<w/2;x+=1.1)g.add(box(M.red,x,0.55,0.01,0.45,0.28,0.22));}
+  else{for(let k=0;k<3;k++){const l=mesh(G.cyl,M.wood2,0,0.3+(k>1?0.5:0),0,0.32,w,0.32,true);l.rotation.z=Math.PI/2;l.position.x=0;l.position.y=k<2?0.32:0.82;l.position.z=k<2?(k?0.3:-0.3):0;g.add(l)}}
+  world.add(g);addEvent({type:'jump',s,stop:2.2,g});
+}
+function addLow(s){
+  const g=new THREE.Group();g.position.z=-s;const w=span-1.2;
+  for(const sd of[-1,1])g.add(box(M.dark,sd*w/2,1.5,0,0.3,3,0.3,true));
+  g.add(box(M.yellow,0,1.65,0,w+0.3,0.7,0.45,true));for(let x=-w/2;x<w/2;x+=1.2)g.add(box(M.dark,x+0.3,1.65,0.24,0.5,0.7,0.05));
+  world.add(g);addEvent({type:'low',s,stop:2.4,g});
+}
+function addBlockade(s){
+  const g=new THREE.Group();g.position.z=-s;const crates=[],w=span-1.0,cw=1.15;
+  for(let row=0;row<3;row++)for(let x=-w/2+cw/2;x<w/2;x+=cw){const c=box(row%2?M.wood:M.wood2,x,0.55+row*1.1,0,cw-0.06,1.04,1.1,true);c.add(box(pm(0x6b4425),0,0,0.56,cw-0.2,0.12,0.02),box(pm(0x6b4425),0,0,0.56,0.12,0.9,0.02));g.add(c);crates.push(c)}
+  world.add(g);const hp=P.assist>=2?2:3;addEvent({type:'punch',s,stop:2.6,g,hp,hpMax:hp,crates,shake:0});
+}
+function addContainer(g,l,s0,len,c){const x=laneX[l];g.add(box(pm(c),x,1.4,-s0-len/2,2.2,2.8,len,true));for(let k=0;k<len/1.2;k++)g.add(box(pm(c),x+1.11,1.4,-s0-0.6-k*1.2,0.04,2.6,0.15).translateY(0));g.add(box(pm(0xffffff),x,2.85,-s0-len/2,2.3,0.12,len))}
+function addLaneBlock(s,blocked,len=6){
+  const g=new THREE.Group();const cols=[0xe8453c,0x2f8cff,0xffa51a,0x2fc36b];let i=0;
+  blocked.forEach(l=>addContainer(g,l,s,len,cols[(i++)%4]));world.add(g);addEvent({type:'lane',s,stop:2.8,g,blocked,len});
+}
+function addTrain(s){
+  const L=Math.floor(rand()*laneX.length),blocked=new Set();laneX.forEach((_,l)=>{if(l!==L)blocked.add(l)});
+  addLaneBlock(s-15,blocked,6);
+  const n=P.assist>=2?2:3,tg=buildTrain(n,[[0xe8453c,0x2f8cff,0xffc21a],[0x2fc36b,0xff8a3d,0x8a5cff],[0x00a3a3,0xff5fa2,0xffc21a]][Math.floor(rand()*3)]);
+  tg.position.set(laneX[L],0,-s);world.add(tg);
+  addEvent({type:'board',s,stop:1.7,lane:L,g:tg,trainEnd:s+n*10-2});
+  for(let k=0;k<n-1;k++){addEvent({type:'gap',s:s+k*10+8,stop:0.9,g:null});mkStars(s+k*10+1.5,{l:L,y:ROOF+1.2},4,0.7)}
+  mkStars(s+(n-1)*10+1.5,{l:L,y:ROOF+1.2},4,0.7);
+  addEvent({type:'exit',s:s+n*10-2,stop:0,g:null});
+  return s+n*10;
+}
+function addPattern(){
+  const asst=P.assist,pad=24+asst*7;
+  if(S.mode==='free'){const l=Math.floor(rand()*laneX.length);mkStars(genS,{l,y:1.2},8,rand()<.5?1.4:0);genS+=18;return}
+  const order=['jump','low','lane','punch','train'];let t=patN<order.length?order[patN]:['jump','low','lane','punch','train','jump','punch','train'][Math.floor(rand()*8)];
+  patN++;const s=genS+(t==='train'?16:0);let end=s;
+  if(t==='jump'){addBarrier(s);end=s+2;mkStars(s-12,{l:Math.floor(rand()*laneX.length),y:1.2},5,0)}
+  else if(t==='low'){addLow(s);end=s+2;mkStars(s-12,{l:Math.floor(rand()*laneX.length),y:1.2},5,0)}
+  else if(t==='punch'){addBlockade(s);end=s+2;mkStars(s-12,{l:Math.floor(rand()*laneX.length),y:1.2},5,0)}
+  else if(t==='lane'){const b=new Set(),f=Math.floor(rand()*laneX.length);laneX.forEach((_,l)=>{if(l!==f&&(laneX.length===2||rand()<.8))b.add(l)});if(!b.size)b.add((f+1)%laneX.length);addLaneBlock(s,b,6);end=s+6;mkStars(s,{l:f,y:1.2},4,0)}
+  else{end=addTrain(s)}
+  genS=end+pad+8;
+}
+function genAhead(){while(genS<P.s+170)addPattern()}
+function clearEvents(){for(const e of events)if(e.g)world.remove(e.g);events=[];for(const s of stars)world.remove(s.m);stars=[];for(const f of fx)world.remove(f.m);fx=[]}
+function cleanup(){
+  while(events.length&&events[0].done&&events[0].s+(events[0].len||0)<P.s-30){const e=events.shift();if(e.g)world.remove(e.g);P.ei=Math.max(0,P.ei-1)}
+  for(let i=stars.length-1;i>=0;i--){const s=stars[i];if(s.s<P.s-25||(s.got&&s.t>0.5)){world.remove(s.m);stars.splice(i,1)}}
+}
+
+/* ефекти */
+function burst(x,y,z,color,n,spd,size,life,g=9){for(let i=0;i<n;i++){const m=new THREE.Mesh(G.box,pm(color));m.scale.setScalar(size*(0.5+Math.random()));m.position.set(x,y,z);m.castShadow=false;world.add(m);
+  fx.push({m,vx:(Math.random()-.5)*spd,vy:Math.random()*spd*.9+1,vz:(Math.random()-.5)*spd,life,t:0,g})}}
+function updateFx(dt){for(let i=fx.length-1;i>=0;i--){const f=fx[i];f.t+=dt;f.vy-=f.g*dt;f.m.position.x+=f.vx*dt;f.m.position.y+=f.vy*dt;f.m.position.z+=f.vz*dt;f.m.rotation.x+=dt*6;f.m.rotation.z+=dt*5;f.m.scale.multiplyScalar(1-dt*0.9);
+  if(f.t>f.life||f.m.position.y<-1){world.remove(f.m);fx.splice(i,1)}}}
+function landFx(small){P.landT=now();sfx.land();burst(P.x,P.y+0.05,-P.s,0xe9e2d0,small?5:9,3,0.12,0.5,6)}
+
+/* ================= логіка гри ================= */
+const needStop=ev=>ev.type==='exit'?false:ev.type==='lane'?ev.blocked.has(P.laneIdx):true;
+function startLeap(ev){
+  const board=ev.type==='board',gap=ev.type==='gap',y1=board||gap?ROOF:P.levelY;
+  P.hop=null;P.leap=board?{t:0,dur:.72,y0:P.y,y1,peak:2.3,speed:5.4}:gap?{t:0,dur:.62,y0:P.y,y1,peak:1.2,speed:6.2}:{t:0,dur:.72,y0:P.y,y1,peak:1.6,speed:7.2};
+  if(board){P.onTrain=true;P.trainLane=ev.lane}
+  P.levelY=y1;resolve(ev);
+}
+function resolve(ev,silent){
+  if(ev.done)return;ev.done=true;
+  if(!silent){
+    const w=now()-P.arriveT;if(P.waitEv===ev){if(w>6)P.fast=0,P.assist=Math.min(3,P.assist+1);else if(w<2.5){P.fast++;if(P.fast>=4){P.fast=0;P.assist=Math.max(0,P.assist-1)}}}
+    P.done++;onProgress();
+  }
+  P.waitEv=null;P.waiting=false;
+}
+function onProgress(){
+  const lv=Math.floor(P.done/8)+1;if(lv!==P.level){P.level=lv;if(lv>1){banner('Рівень '+lv+'!');palIdx=(palIdx+1)%PAL.length;P.joyT=now();sfx.ok()}}
+}
+function hitBlock(ev){
+  ev.hp--;ev.shake=0.3;P.punchT=now();
+  const left=ev.crates.length,rem=ev.hp<=0?left:Math.ceil(left/(ev.hp+1));
+  for(let i=0;i<rem;i++){const c=ev.crates.splice(Math.floor(Math.random()*ev.crates.length),1)[0];if(!c)break;const wp=new THREE.Vector3();c.getWorldPosition(wp);burst(wp.x,wp.y,wp.z,0xc58a4a,4,6,0.22,0.9,12);ev.g.remove(c)}
+  if(ev.hp<=0){sfx.crate();P.joyT=now();resolve(ev)}else sfx.punch();
+}
+function banner(t){const b=$('banner');b.textContent=t;b.classList.add('on');setTimeout(()=>b.classList.remove('on'),1800)}
+function hintFor(ev){
+  if(!ev)return'';
+  const dirTo=l=>l>P.laneIdx?'праворуч':'ліворуч';
+  switch(ev.type){
+    case'jump':return S.seated?'Руки вгору!':'Підстрибни!';case'low':return S.seated?'Пригнись!':'Присядь!';
+    case'punch':return'Бий руками вперед!  ×'+ev.hp;
+    case'lane':{let best=-1,bd=9;laneX.forEach((_,l)=>{if(!ev.blocked.has(l)&&Math.abs(l-P.laneIdx)<bd){bd=Math.abs(l-P.laneIdx);best=l}});return ev.blocked.has(P.laneIdx)?'Перейди '+dirTo(best)+'!':'';}
+    case'board':return P.laneIdx!==ev.lane?'Стань до потяга '+dirTo(ev.lane)+'!':(S.seated?'Руки вгору — на вагон!':'Підстрибни на вагон!');
+    case'gap':return S.seated?'Руки вгору — далі!':'Стрибай на наступний вагон!';
+  }return'';
+}
+const marker=new THREE.Mesh(new THREE.ConeGeometry(0.5,1.0,4),new THREE.MeshStandardMaterial({color:0x2fe06b,emissive:0x1fa84f,emissiveIntensity:.8}));marker.rotation.x=Math.PI;marker.visible=false;scene.add(marker);
+function updateGame(dt,run){
+  const t=now();P.canRun=run;
+  while(P.ei<events.length&&events[P.ei].done)P.ei++;
+  const ev=events[P.ei]||null;
+  /* смуга */
+  let want=input.laneIdx;P.zoneBlocked=null;
+  for(const e of events){if(e.blocked&&P.s>e.s-1.5&&P.s<e.s+e.len){P.zoneBlocked=e.blocked;break}}
+  if(P.onTrain)want=P.trainLane;else if(P.zoneBlocked&&P.zoneBlocked.has(want))want=P.laneIdx;
+  P.laneIdx=want;P.x+=(laneX[P.laneIdx]-P.x)*Math.min(1,dt*11);
+  /* рух */
+  P.waiting=false;P.waitFor=null;let speed=0;
+  if(P.leap){
+    const L=P.leap;L.t+=dt;const u=Math.min(1,L.t/L.dur);P.y=lerp(L.y0,L.y1,u)+L.peak*4*u*(1-u);P.s+=L.speed*dt;speed=L.speed;
+    if(u>=1){P.leap=null;P.y=L.y1;P.levelY=L.y1;P.vy=0;landFx()}
+  }else if(run){
+    if(P.duck&&P.s>=P.duck)P.duck=0;
+    if(ev){
+      if(ev.type==='exit'){if(P.s>=ev.s){P.onTrain=false;P.levelY=0;resolve(ev,true)}}
+      const need=needStop(ev),stopPt=ev.s-ev.stop;
+      if(need){
+        const rem=stopPt-P.s;
+        if(rem<=0.02){
+          P.s=Math.min(P.s,stopPt);P.waiting=true;P.waitFor=ev;if(P.waitEv!==ev){P.waitEv=ev;P.arriveT=t}
+          waitLogic(ev,t);
+        }else{speed=Math.max(1.4,BASE*Math.min(1,rem/3.5));P.s=Math.min(P.s+speed*dt,stopPt)}
+      }else{speed=BASE;P.s+=speed*dt;if(ev.type==='lane'&&P.s>=ev.s)resolve(ev)}
+    }else{speed=BASE;P.s+=speed*dt}
+  }
+  P.speed=lerp(P.speed,speed,Math.min(1,dt*8));
+  /* вертикаль: хоп / падіння */
+  if(input.jumpTs>P.jumpSeen){P.jumpSeen=input.jumpTs;if(!P.leap&&!P.hop&&(state==='playing'||state==='tutorial'))P.hop={t:0,dur:.62,peak:1.25}}
+  if(!P.leap){
+    if(P.hop){P.hop.t+=dt;const u=Math.min(1,P.hop.t/P.hop.dur);P.y=P.levelY+P.hop.peak*4*u*(1-u);if(u>=1){P.hop=null;P.y=P.levelY;landFx(true)}}
+    else if(P.y>P.levelY+0.001){P.vy-=32*dt;P.y+=P.vy*dt;if(P.y<=P.levelY){P.y=P.levelY;P.vy=0;landFx()}}
+    else P.y=P.levelY;
+  }
+  if(!(P.waiting&&P.waitFor&&P.waitFor.type==='punch'))while(input.punchQ.length&&t-input.punchQ[0]>0.5)input.punchQ.shift();
+  /* зірочки */
+  for(const s of stars){
+    if(s.got){s.t+=dt;s.m.scale.setScalar(1+s.t*3);s.m.position.y+=dt*3;continue}
+    s.m.rotation.y+=dt*3;
+    if(Math.abs(P.s-s.s)<0.9&&Math.abs(P.x-laneX[s.l])<1.1&&Math.abs(P.y+1.0-s.y)<1.4){s.got=true;P.stars++;totalStars++;sfx.star();burst(s.m.position.x,s.m.position.y,s.m.position.z,0xffd23f,6,4,.12,.6,4);
+      localStorage.setItem('br_stars',totalStars);$('starn').textContent=P.stars;
+      if(P.stars%20===0){P.joyT=t;banner('Супер!')}}
+  }
+  for(const e of events)if(e.shake>0){e.shake-=dt;e.g.position.x=Math.sin(e.shake*60)*0.08*(e.shake/0.3)}else if(e.g&&e.type==='punch')e.g.position.x=0;
+  /* HUD */
+  let hint='';if(run&&ev){const d=ev.s-ev.stop-P.s;if((P.waiting&&P.waitFor===ev)||(d<16&&ev.type!=='exit'&&needStop(ev)))hint=hintFor(ev)}
+  const he=$('hint');he.textContent=hint;he.classList.toggle('on',!!hint);
+  marker.visible=false;
+  if(run&&P.waiting&&ev&&(ev.type==='lane'||ev.type==='board')&&hint.startsWith('Перейди')||hint.startsWith('Стань')){
+    let tl=ev.type==='board'?ev.lane:-1;if(ev.type==='lane')laneX.forEach((_,l)=>{if(!ev.blocked.has(l)&&tl<0)tl=l});
+    marker.visible=true;marker.position.set(laneX[tl],2.3+Math.sin(t*6)*0.25,-(P.s+4));
+  }
+  $('barf').style.width=((P.done%8)/8*100)+'%';$('lvlt').textContent='Рівень '+(Math.floor(P.done/8)+1);
+}
+function waitLogic(ev,t){
+  switch(ev.type){
+    case'jump':case'board':case'gap':
+      if(ev.type==='board'&&P.laneIdx!==ev.lane)break;
+      if(input.jumpTs>P.jumpUsed&&t-input.jumpTs<0.35){P.jumpUsed=input.jumpTs;startLeap(ev)}break;
+    case'low':if(input.crouch){P.duck=ev.s+3.6;resolve(ev)}break;
+    case'punch':while(input.punchQ.length&&!ev.done){const ts=input.punchQ.shift();if(ts>=P.arriveT-0.3)hitBlock(ev)}break;
+  }
+}
+
+/* ================= анімація персонажа ================= */
+function animChar(dt,t){
+  if(!char)return;
+  const c=char,sp=P.speed/BASE;
+  P.runPh+=dt*(4+sp*9);
+  const ph=P.runPh,air=P.leap||P.hop||P.y>P.levelY+0.05,duck=(P.duck>0||(input.crouch&&!air)),punch=t-P.punchT<0.28,joy=t-P.joyT<1.3,landing=t-P.landT<0.18;
+  let lL=0,lR=0,aL=0,aR=0,by=0,tilt=0,sy=1;
+  if(air){lL=0.9;lR=-0.2;aL=2.6;aR=2.6;if(P.leap&&P.leap.dur<0.7)tilt=-0.15}
+  else if(duck){lL=lR=1.1;aL=aR=0.5;by=-0.38;tilt=0.55}
+  else{
+    const sw=Math.sin(ph)*0.95*sp;lL=sw;lR=-sw;aL=-sw*0.9;aR=sw*0.9;by=Math.abs(Math.sin(ph))*0.07*sp;
+    if(sp<0.05){const b=Math.sin(t*2.4);aL=0.05+b*0.04;aR=0.05-b*0.04;by=b*0.01}
+    if(landing)sy=0.9;
+  }
+  if(punch&&!duck){const u=1-(t-P.punchT)/0.28,arm=P.punchArm?'armR':'armL';c[arm].rotation.x=1.55*Math.sin(u*Math.PI*0.9+0.2);const other=P.punchArm?'armL':'armR';c[other].rotation.x=aL*0.5-0.5}
+  if(joy){const u=(t-P.joyT);aL=aR=2.9+Math.sin(u*14)*0.3;by=Math.abs(Math.sin(u*8))*0.25;c.root.rotation.y+=0}
+  const lerpA=Math.min(1,dt*20);
+  c.legL.rotation.x=lerp(c.legL.rotation.x,lL,lerpA);c.legR.rotation.x=lerp(c.legR.rotation.x,lR,lerpA);
+  if(!punch||duck){c.armL.rotation.x=lerp(c.armL.rotation.x,aL,lerpA);c.armR.rotation.x=lerp(c.armR.rotation.x,aR,lerpA)}
+  c.armL.rotation.z=lerp(c.armL.rotation.z,air||joy?0.35:0.08,lerpA);c.armR.rotation.z=lerp(c.armR.rotation.z,air||joy?-0.35:-0.08,lerpA);
+  c.body.position.y=lerp(c.body.position.y,by,lerpA);c.body.scale.y=lerp(c.body.scale.y,sy,lerpA);c.torso.rotation.x=lerp(c.torso.rotation.x,tilt,lerpA);
+  c.head.rotation.y=Math.sin(t*1.7)*(sp<0.05?0.35:0.05);
+  const lean=clamp((laneX[P.laneIdx]-P.x)*0.3,-0.5,0.5);
+  c.root.rotation.y=lerp(c.root.rotation.y,joy?-(t-P.joyT)*9:-lean,Math.min(1,dt*10));
+  c.root.position.set(P.x,P.y,-P.s);
+}
+
+/* ================= камера / візуал / цикл ================= */
+const camT=new THREE.Vector3(),camL=new THREE.Vector3();
+function updateVisuals(dt,t){
+  if(state==='menu'){const a=t*0.25;camT.set(Math.sin(a)*5,3.2,-P.s+Math.cos(a)*7+2);camL.set(0,1.4,-P.s)}
+  else{camT.set(P.x*0.6,3.7+P.y*0.85,-P.s+8.2);camL.set(P.x*0.4,1.5+P.y*0.8,-P.s-9)}
+  camera.position.lerp(camT,1-Math.exp(-dt*(state==='menu'?2:6)));camera.lookAt(camL);
+  sun.position.set(P.x-22,34,-P.s+16);sun.target.position.set(P.x,0,-P.s-6);
+  sky.position.copy(camera.position);far.position.z=-P.s;far.position.x=0;
+  for(const c of clouds.children){c.position.x+=c.userData.sp*dt;if(c.position.x>140)c.position.x=-140}clouds.position.z=-P.s*0.97;
+  const tp=PAL[palIdx],k=1-Math.exp(-dt*0.8);
+  palCur.top.lerp(new THREE.Color(tp.top),k);palCur.bot.lerp(new THREE.Color(tp.bot),k);palCur.sun.lerp(new THREE.Color(tp.sun),k);
+  skyMat.uniforms.top.value.copy(palCur.top);skyMat.uniforms.bot.value.copy(palCur.bot);scene.fog.color.copy(palCur.bot);sun.color.copy(palCur.sun);
+  for(const a of ambient){a.g.position.set(a.x,0,-(P.s+((t*5+a.off)%260)-60))}
+  for(const[,g]of chunks)for(const b of g.userData.spin)b.rotation.z+=dt*0.9;
+  updateFx(dt);
+}
+function actionLabel(t){
+  if(t-input.flashT<0.45)return input.flash;
+  if(input.crouch)return'CROUCH';
+  if(P.waiting&&P.waitFor&&state==='playing')return'WAITING';
+  if(S.lanes===3){if(input.laneIdx===0)return'LEFT';if(input.laneIdx===2)return'RIGHT'}else return input.laneIdx===0?'LEFT':'RIGHT';
+  return'RUNNING';
+}
+
+/* ================= стани та UI ================= */
+function setState(s){
+  state=s;
+  for(const id of['menu','calib','lost','pause'])$(id).classList.toggle('show',id===s);
+  $('tut').classList.toggle('show',s==='tutorial');$('pausebtn').style.display=(s==='playing'||s==='tutorial')?'block':'none';
+  if(s!=='playing'){$('hint').classList.remove('on')}
+}
+function resetWorld(){
+  for(const[,g]of chunks){world.remove(g);g.userData.inst.forEach(m=>m.dispose())}chunks.clear();clearEvents();
+  setLayout();const keepAssist=P.assist;P=newPlayer();P.assist=keepAssist;P.level=1;genS=34;patN=0;
+  input.laneIdx=S.lanes===3?1:0;input.punchQ.length=0;tr.side=S.lanes===3?0:-1;
+  P.laneIdx=input.laneIdx;P.x=laneX[P.laneIdx];buildChar();$('starn').textContent=0;updateChunks();genAhead();
+}
+function beginPlay(){
+  audioInit();resetWorld();setState('playing');camera.position.set(P.x,3.7,8.2);
+  banner(S.mode==='free'?'Вільний біг!':'Побігли!');
+}
+function startGame(){
+  audioInit();
+  if(tr.on&&!tr.calibrated)startCalibration(beginPlay);else beginPlay();
+}
+function startTutorial(){
+  audioInit();resetWorld();tut={step:0,c:0};setState('tutorial');tutUI();
+  if(tr.on&&!tr.calibrated)startCalibration(()=>setState('tutorial'));
+}
+function tutUI(){
+  if(!tut)return;
+  if(tut.step>=TUT.length){$('tutt').textContent='Молодець! Ти все вмієш!';$('tutd').innerHTML='';P.joyT=now();banner('Готово!');setTimeout(()=>{if(state==='tutorial'){tut=null;setState('menu')}},2200);tut.step=99;return}
+  const s=TUT[tut.step];$('tutt').textContent=(S.seated&&s.ts?s.ts:s.t)+(s.n>1?`  (${tut.c}/${s.n})`:'');
+  $('tutd').innerHTML=TUT.map((_,i)=>`<i class="${i<tut.step?'on':''}"></i>`).join('');
+}
+function renderSuits(){
+  $('suits').innerHTML='';
+  SUITS.forEach((s,i)=>{const b=document.createElement('button'),ok=totalStars>=s.need;b.className='swatch'+(ok?'':' lock')+(i===suit?' sel':'');b.style.background='#'+s.c.toString(16).padStart(6,'0');b.title=ok?s.n:`відкриється за ${s.need} зірочок`;
+    b.onclick=()=>{if(!ok)return;suit=i;localStorage.setItem('br_suit',i);renderSuits();buildChar()};$('suits').appendChild(b)});
+  $('suitnote').textContent=`(зібрано зірочок: ${totalStars})`;
+}
+$('l2').onclick=()=>{S.lanes=2;$('l2').classList.add('sel');$('l3').classList.remove('sel');resetWorld()};
+$('l3').onclick=()=>{S.lanes=3;$('l3').classList.add('sel');$('l2').classList.remove('sel');resetWorld()};
+function setPose(seated){
+  S.seated=seated;$('p1').classList.toggle('sel',!seated);$('p2').classList.toggle('sel',seated);
+  $('posenote').textContent=seated?'Сидячи: нахил корпусу — смуга; обидві руки вгору — стрибок; пригнутися — під перешкоду; рука вперед — удар. Потрібні голова, плечі й руки в кадрі.':'Стоячи: нахил або крок убік; підстрибнути; присісти; махнути рукою вперед. Потрібне тіло до колін.';
+  if(tr.on){tr.calibrated=false;tr.base=null;resetDetect();setStatus('Змінено позу — потрібне калібрування','y')}
+}
+$('p1').onclick=()=>setPose(false);$('p2').onclick=()=>setPose(true);setPose(false);
+$('m1').onclick=()=>{S.mode='nolose';$('m1').classList.add('sel');$('m2').classList.remove('sel')};
+$('m2').onclick=()=>{S.mode='free';$('m2').classList.add('sel');$('m1').classList.remove('sel')};
+$('play').onclick=startGame;$('tutbtn').onclick=startTutorial;
+$('tutexit').onclick=()=>{tut=null;setState('menu')};
+$('camBtn').onclick=()=>tr.on?stopCamera():startCamera();
+$('calBtn').onclick=()=>{audioInit();startCalibration(()=>setState(prevState==='calib'?'menu':prevState))};
+$('calcancel').onclick=()=>{if(tr.calib)tr.calib.active=false;afterCalib=null;setState(prevState==='calib'?'menu':prevState)};
+$('pausebtn').onclick=()=>{prevState=state;setState('pause')};
+$('resume').onclick=()=>setState(prevState);
+$('tomenu').onclick=()=>{tut=null;setState('menu');resetWorld();renderSuits()};
+$('sens').oninput=e=>S.sens=+e.target.value;$('smooth').oninput=e=>S.smooth=+e.target.value;
+$('vol').oninput=e=>{S.volume=+e.target.value;if(AU.master)AU.master.gain.value=S.volume};
+$('music').onchange=e=>{S.music=e.target.checked;if(AU.music)AU.music.gain.value=S.music?0.32:0};
+addEventListener('keydown',e=>{
+  if(e.repeat&&e.code!=='ArrowDown')return;audioInit();
+  const k=e.code;
+  if(k==='ArrowLeft'||k==='KeyA'){if(!tr.calibrated)setLane(input.laneIdx-1)}
+  else if(k==='ArrowRight'||k==='KeyD'){if(!tr.calibrated)setLane(input.laneIdx+1)}
+  else if(k==='ArrowUp'||k==='Space'||k==='KeyW'){e.preventDefault();if(state==='playing'||state==='tutorial')emit('jump')}
+  else if(k==='ArrowDown'||k==='KeyS'){if(!input.kbdCrouch){input.kbdCrouch=true;if(state==='playing'||state==='tutorial')emit('crouch')}}
+  else if(k==='KeyF'||k==='KeyZ'||k==='KeyX'){if(state==='playing'||state==='tutorial')emit('punch')}
+  else if(k==='KeyP'||k==='Escape'){if(state==='playing'||state==='tutorial'){prevState=state;setState('pause')}else if(state==='pause')setState(prevState)}
+});
+addEventListener('keyup',e=>{if(e.code==='ArrowDown'||e.code==='KeyS')input.kbdCrouch=false});
+
+/* ================= головний цикл ================= */
+let last=performance.now();
+function frame(ms){
+  requestAnimationFrame(frame);
+  const dt=Math.min(0.05,(ms-last)/1000);last=ms;const t=now();
+  trackerUpdate();
+  /* камера втратила гравця -> автопауза */
+  if(tr.on&&tr.calibrated&&(state==='playing'||state==='tutorial')&&t-tr.lastPose>0.8){prevState=state;setState('lost')}
+  else if(state==='lost'&&t-tr.lastPose<0.4)setState(prevState);
+  const active=state==='playing'||state==='tutorial';
+  if(active||state==='menu'){
+    updateGame(dt,state==='playing');
+    if(state==='playing'){genAhead();updateChunks();cleanup()}
+  }
+  animChar(dt,t);updateVisuals(dt,t);
+  $('action').textContent=actionLabel(t);
+  renderer.render(scene,camera);
+}
+setLayout();resetWorld();renderSuits();setState('menu');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
