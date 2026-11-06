@@ -75,7 +75,689 @@ input[type=range]{width:100%}
 #cprogf{height:100%;width:0;background:#2fc36b}
 @media(max-width:800px){#app{grid-template-columns:1fr;grid-template-rows:60vh 40vh}#side{border-left:0;border-top:3px solid #26406a}}
 </style>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script>
+/* ===== mini3: власний мінімальний 3D-рушій (без зовнішніх залежностей) — математика ===== */
+const T={};
+class Vector3{
+  constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
+  set(x,y,z){this.x=x;this.y=y;this.z=z;return this}
+  setScalar(s){this.x=this.y=this.z=s;return this}
+  copy(v){this.x=v.x;this.y=v.y;this.z=v.z;return this}
+  clone(){return new Vector3(this.x,this.y,this.z)}
+  add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this}
+  sub(v){this.x-=v.x;this.y-=v.y;this.z-=v.z;return this}
+  multiplyScalar(s){this.x*=s;this.y*=s;this.z*=s;return this}
+  dot(v){return this.x*v.x+this.y*v.y+this.z*v.z}
+  cross(v){const x=this.y*v.z-this.z*v.y,y=this.z*v.x-this.x*v.z,z=this.x*v.y-this.y*v.x;this.x=x;this.y=y;this.z=z;return this}
+  lengthSq(){return this.x*this.x+this.y*this.y+this.z*this.z}
+  length(){return Math.sqrt(this.lengthSq())}
+  normalize(){return this.multiplyScalar(1/(this.length()||1))}
+  lerp(v,a){this.x+=(v.x-this.x)*a;this.y+=(v.y-this.y)*a;this.z+=(v.z-this.z)*a;return this}
+  applyMatrix4(m){const e=m.e,x=this.x,y=this.y,z=this.z,w=1/(e[3]*x+e[7]*y+e[11]*z+e[15]);
+    this.x=(e[0]*x+e[4]*y+e[8]*z+e[12])*w;this.y=(e[1]*x+e[5]*y+e[9]*z+e[13])*w;this.z=(e[2]*x+e[6]*y+e[10]*z+e[14])*w;return this}
+  setFromMatrixPosition(m){this.x=m.e[12];this.y=m.e[13];this.z=m.e[14];return this}
+}
+class Euler{
+  constructor(x=0,y=0,z=0){this._x=x;this._y=y;this._z=z;this._cb=null}
+  get x(){return this._x}set x(v){this._x=v;this._cb&&this._cb()}
+  get y(){return this._y}set y(v){this._y=v;this._cb&&this._cb()}
+  get z(){return this._z}set z(v){this._z=v;this._cb&&this._cb()}
+  set(x,y,z){this._x=x;this._y=y;this._z=z;this._cb&&this._cb();return this}
+  setFromQuaternion(q,update=true){
+    const x=q._x,y=q._y,z=q._z,w=q._w;
+    const m11=1-2*(y*y+z*z),m12=2*(x*y-z*w),m13=2*(x*z+y*w),m22=1-2*(x*x+z*z),m23=2*(y*z-x*w),m32=2*(y*z+x*w),m33=1-2*(x*x+y*y);
+    this._y=Math.asin(Math.max(-1,Math.min(1,m13)));
+    if(Math.abs(m13)<0.9999999){this._x=Math.atan2(-m23,m33);this._z=Math.atan2(-m12,m11)}else{this._x=Math.atan2(m32,m22);this._z=0}
+    if(update&&this._cb)this._cb();return this;
+  }
+}
+class Quaternion{
+  constructor(x=0,y=0,z=0,w=1){this._x=x;this._y=y;this._z=z;this._w=w;this._cb=null}
+  get x(){return this._x}set x(v){this._x=v;this._cb&&this._cb()}
+  get y(){return this._y}set y(v){this._y=v;this._cb&&this._cb()}
+  get z(){return this._z}set z(v){this._z=v;this._cb&&this._cb()}
+  get w(){return this._w}set w(v){this._w=v;this._cb&&this._cb()}
+  set(x,y,z,w){this._x=x;this._y=y;this._z=z;this._w=w;this._cb&&this._cb();return this}
+  copy(q){return this.set(q._x,q._y,q._z,q._w)}
+  clone(){return new Quaternion(this._x,this._y,this._z,this._w)}
+  setFromAxisAngle(a,ang){const h=ang/2,s=Math.sin(h);return this.set(a.x*s,a.y*s,a.z*s,Math.cos(h))}
+  setFromEuler(e,update=true){
+    const c1=Math.cos(e._x/2),c2=Math.cos(e._y/2),c3=Math.cos(e._z/2),s1=Math.sin(e._x/2),s2=Math.sin(e._y/2),s3=Math.sin(e._z/2);
+    this._x=s1*c2*c3+c1*s2*s3;this._y=c1*s2*c3-s1*c2*s3;this._z=c1*c2*s3+s1*s2*c3;this._w=c1*c2*c3-s1*s2*s3;
+    if(update&&this._cb)this._cb();return this;
+  }
+  setFromUnitVectors(a,b){
+    let r=a.x*b.x+a.y*b.y+a.z*b.z+1,x,y,z,w;
+    if(r<1e-6){r=0;if(Math.abs(a.x)>Math.abs(a.z)){x=-a.y;y=a.x;z=0;w=r}else{x=0;y=-a.z;z=a.y;w=r}}
+    else{x=a.y*b.z-a.z*b.y;y=a.z*b.x-a.x*b.z;z=a.x*b.y-a.y*b.x;w=r}
+    this._x=x;this._y=y;this._z=z;this._w=w;return this.normalize();
+  }
+  normalize(){let l=Math.hypot(this._x,this._y,this._z,this._w);if(l===0){this._x=this._y=this._z=0;this._w=1}else{l=1/l;this._x*=l;this._y*=l;this._z*=l;this._w*=l}this._cb&&this._cb();return this}
+  multiplyQuaternions(a,b){
+    const ax=a._x,ay=a._y,az=a._z,aw=a._w,bx=b._x,by=b._y,bz=b._z,bw=b._w;
+    this._x=ax*bw+aw*bx+ay*bz-az*by;this._y=ay*bw+aw*by+az*bx-ax*bz;this._z=az*bw+aw*bz+ax*by-ay*bx;this._w=aw*bw-ax*bx-ay*by-az*bz;
+    this._cb&&this._cb();return this;
+  }
+  multiply(q){return this.multiplyQuaternions(this,q)}
+  premultiply(q){return this.multiplyQuaternions(q,this)}
+  slerp(qb,t){
+    if(t===0)return this;if(t===1)return this.copy(qb);
+    const x=this._x,y=this._y,z=this._z,w=this._w;let c=w*qb._w+x*qb._x+y*qb._y+z*qb._z,bx=qb._x,by=qb._y,bz=qb._z,bw=qb._w;
+    if(c<0){bw=-bw;bx=-bx;by=-by;bz=-bz;c=-c}
+    if(c>=0.9995){this._w=w+t*(bw-w);this._x=x+t*(bx-x);this._y=y+t*(by-y);this._z=z+t*(bz-z);return this.normalize()}
+    const sh=Math.sqrt(1-c*c),ha=Math.atan2(sh,c),ra=Math.sin((1-t)*ha)/sh,rb=Math.sin(t*ha)/sh;
+    this._w=w*ra+bw*rb;this._x=x*ra+bx*rb;this._y=y*ra+by*rb;this._z=z*ra+bz*rb;this._cb&&this._cb();return this;
+  }
+}
+class Matrix4{
+  constructor(){this.e=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}
+  identity(){this.e.set([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);return this}
+  copy(m){this.e.set(m.e);return this}
+  compose(p,q,s){
+    const x=q._x,y=q._y,z=q._z,w=q._w,x2=x+x,y2=y+y,z2=z+z,xx=x*x2,xy=x*y2,xz=x*z2,yy=y*y2,yz=y*z2,zz=z*z2,wx=w*x2,wy=w*y2,wz=w*z2,e=this.e;
+    e[0]=(1-(yy+zz))*s.x;e[1]=(xy+wz)*s.x;e[2]=(xz-wy)*s.x;e[3]=0;
+    e[4]=(xy-wz)*s.y;e[5]=(1-(xx+zz))*s.y;e[6]=(yz+wx)*s.y;e[7]=0;
+    e[8]=(xz+wy)*s.z;e[9]=(yz-wx)*s.z;e[10]=(1-(xx+yy))*s.z;e[11]=0;
+    e[12]=p.x;e[13]=p.y;e[14]=p.z;e[15]=1;return this;
+  }
+  multiplyMatrices(a,b){
+    const A=a.e,B=b.e,e=this.e;
+    for(let c=0;c<4;c++)for(let r=0;r<4;r++)e[c*4+r]=A[r]*B[c*4]+A[4+r]*B[c*4+1]+A[8+r]*B[c*4+2]+A[12+r]*B[c*4+3];
+    return this;
+  }
+  invert(){
+    const m=this.e,n11=m[0],n21=m[1],n31=m[2],n41=m[3],n12=m[4],n22=m[5],n32=m[6],n42=m[7],n13=m[8],n23=m[9],n33=m[10],n43=m[11],n14=m[12],n24=m[13],n34=m[14],n44=m[15];
+    const t11=n23*n34*n42-n24*n33*n42+n24*n32*n43-n22*n34*n43-n23*n32*n44+n22*n33*n44,
+      t12=n14*n33*n42-n13*n34*n42-n14*n32*n43+n12*n34*n43+n13*n32*n44-n12*n33*n44,
+      t13=n13*n24*n42-n14*n23*n42+n14*n22*n43-n12*n24*n43-n13*n22*n44+n12*n23*n44,
+      t14=n14*n23*n32-n13*n24*n32-n14*n22*n33+n12*n24*n33+n13*n22*n34-n12*n23*n34;
+    const det=n11*t11+n21*t12+n31*t13+n41*t14;if(det===0)return this.identity();const d=1/det;
+    m[0]=t11*d;m[1]=(n24*n33*n41-n23*n34*n41-n24*n31*n43+n21*n34*n43+n23*n31*n44-n21*n33*n44)*d;
+    m[2]=(n22*n34*n41-n24*n32*n41+n24*n31*n42-n21*n34*n42-n22*n31*n44+n21*n32*n44)*d;
+    m[3]=(n23*n32*n41-n22*n33*n41-n23*n31*n42+n21*n33*n42+n22*n31*n43-n21*n32*n43)*d;
+    m[4]=t12*d;m[5]=(n13*n34*n41-n14*n33*n41+n14*n31*n43-n11*n34*n43-n13*n31*n44+n11*n33*n44)*d;
+    m[6]=(n14*n32*n41-n12*n34*n41-n14*n31*n42+n11*n34*n42+n12*n31*n44-n11*n32*n44)*d;
+    m[7]=(n12*n33*n41-n13*n32*n41+n13*n31*n42-n11*n33*n42-n12*n31*n43+n11*n32*n43)*d;
+    m[8]=t13*d;m[9]=(n14*n23*n41-n13*n24*n41-n14*n21*n43+n11*n24*n43+n13*n21*n44-n11*n23*n44)*d;
+    m[10]=(n12*n24*n41-n14*n22*n41+n14*n21*n42-n11*n24*n42-n12*n21*n44+n11*n22*n44)*d;
+    m[11]=(n13*n22*n41-n12*n23*n41-n13*n21*n42+n11*n23*n42+n12*n21*n43-n11*n22*n43)*d;
+    m[12]=t14*d;m[13]=(n13*n24*n31-n14*n23*n31+n14*n21*n33-n11*n24*n33-n13*n21*n34+n11*n23*n34)*d;
+    m[14]=(n14*n22*n31-n12*n24*n31-n14*n21*n32+n11*n24*n32+n12*n21*n34-n11*n22*n34)*d;
+    m[15]=(n12*n23*n31-n13*n22*n31+n13*n21*n32-n11*n23*n32-n12*n21*n33+n11*n22*n33)*d;return this;
+  }
+  makePerspective(l,r,t,b,n,f){const e=this.e,x=2*n/(r-l),y=2*n/(t-b),a=(r+l)/(r-l),bb=(t+b)/(t-b),c=-(f+n)/(f-n),d=-2*f*n/(f-n);
+    e.set([x,0,0,0,0,y,0,0,a,bb,c,-1,0,0,d,0]);return this}
+  makeOrthographic(l,r,t,b,n,f){const e=this.e,w=1/(r-l),h=1/(t-b),p=1/(f-n);
+    e.set([2*w,0,0,0,0,2*h,0,0,0,0,-2*p,0,-(r+l)*w,-(t+b)*h,-(f+n)*p,1]);return this}
+  lookAt(eye,target,up){ // матриця повороту об'єкта: z вісь = eye-target
+    let zx=eye.x-target.x,zy=eye.y-target.y,zz=eye.z-target.z,zl=Math.hypot(zx,zy,zz)||1;zx/=zl;zy/=zl;zz/=zl;
+    let xx=up.y*zz-up.z*zy,xy=up.z*zx-up.x*zz,xz=up.x*zy-up.y*zx,xl=Math.hypot(xx,xy,xz);
+    if(xl<1e-8){zx+=1e-4;xx=up.y*zz-up.z*zy;xy=up.z*zx-up.x*zz;xz=up.x*zy-up.y*zx;xl=Math.hypot(xx,xy,xz)||1}
+    xx/=xl;xy/=xl;xz/=xl;const yx=zy*xz-zz*xy,yy=zz*xx-zx*xz,yz=zx*xy-zy*xx,e=this.e;
+    e[0]=xx;e[1]=xy;e[2]=xz;e[4]=yx;e[5]=yy;e[6]=yz;e[8]=zx;e[9]=zy;e[10]=zz;return this;
+  }
+  setFromRotationToQuaternion(q){ // з повороту матриці у кватерніон
+    const e=this.e,m11=e[0],m12=e[4],m13=e[8],m21=e[1],m22=e[5],m23=e[9],m31=e[2],m32=e[6],m33=e[10],tr=m11+m22+m33;let s;
+    if(tr>0){s=0.5/Math.sqrt(tr+1);q.set((m32-m23)*s,(m13-m31)*s,(m21-m12)*s,0.25/s)}
+    else if(m11>m22&&m11>m33){s=2*Math.sqrt(1+m11-m22-m33);q.set(0.25*s,(m12+m21)/s,(m13+m31)/s,(m32-m23)/s)}
+    else if(m22>m33){s=2*Math.sqrt(1+m22-m11-m33);q.set((m12+m21)/s,0.25*s,(m23+m32)/s,(m13-m31)/s)}
+    else{s=2*Math.sqrt(1+m33-m11-m22);q.set((m13+m31)/s,(m23+m32)/s,0.25*s,(m21-m12)/s)}
+    return q;
+  }
+}
+class Color{
+  constructor(v){this.r=1;this.g=1;this.b=1;if(v!==undefined)this.set(v)}
+  set(v){if(typeof v==='number')return this.setHex(v);if(v&&v.r!==undefined)return this.copy(v);return this}
+  setHex(h){this.r=((h>>16)&255)/255;this.g=((h>>8)&255)/255;this.b=(h&255)/255;return this}
+  setHSL(h,s,l){
+    const f=(n)=>{const k=(n+h*12)%12,a=s*Math.min(l,1-l);return l-a*Math.max(-1,Math.min(k-3,9-k,1))};
+    this.r=f(0);this.g=f(8);this.b=f(4);return this;
+  }
+  copy(c){this.r=c.r;this.g=c.g;this.b=c.b;return this}
+  clone(){return new Color().copy(this)}
+  lerp(c,a){this.r+=(c.r-this.r)*a;this.g+=(c.g-this.g)*a;this.b+=(c.b-this.b)*a;return this}
+}
+Object.assign(T,{Vector3,Euler,Quaternion,Matrix4,Color});
+/* ===== mini3: сцена, камера, світло, матеріали ===== */
+const _q1=new Quaternion(),_ax=new Vector3(),_m1=new Matrix4(),_v1=new Vector3(),_up=new Vector3(0,1,0);
+class Object3D{
+  constructor(){
+    this.position=new Vector3();this.rotation=new Euler();this.quaternion=new Quaternion();this.scale=new Vector3(1,1,1);
+    this.rotation._cb=()=>this.quaternion.setFromEuler(this.rotation,false);
+    this.quaternion._cb=()=>this.rotation.setFromQuaternion(this.quaternion,false);
+    this.matrix=new Matrix4();this.matrixWorld=new Matrix4();this.children=[];this.parent=null;this.visible=true;this.userData={};
+    this.castShadow=false;this.receiveShadow=false;this.renderOrder=0;this.frustumCulled=true;
+  }
+  add(...o){for(const c of o){if(c.parent)c.parent.remove(c);c.parent=this;this.children.push(c)}return this}
+  remove(...o){for(const c of o){const i=this.children.indexOf(c);if(i>=0){this.children.splice(i,1);c.parent=null}}return this}
+  clear(){for(const c of this.children)c.parent=null;this.children.length=0;return this}
+  traverse(fn){fn(this);for(const c of this.children)c.traverse(fn)}
+  updateMatrix(){this.matrix.compose(this.position,this.quaternion,this.scale)}
+  updateMatrixWorld(){
+    this.matrix.compose(this.position,this.quaternion,this.scale);
+    if(this.parent)this.matrixWorld.multiplyMatrices(this.parent.matrixWorld,this.matrix);else this.matrixWorld.copy(this.matrix);
+    for(const c of this.children)c.updateMatrixWorld();
+  }
+  getWorldPosition(v){
+    const chain=[];for(let o=this;o;o=o.parent)chain.push(o);
+    const m=new Matrix4(),t=new Matrix4(),tmp=new Matrix4();
+    for(let i=chain.length-1;i>=0;i--){const o=chain[i];t.compose(o.position,o.quaternion,o.scale);tmp.multiplyMatrices(m,t);m.copy(tmp)}
+    return v.setFromMatrixPosition(m);
+  }
+  rotateX(a){this.quaternion.multiply(_q1.setFromAxisAngle(_ax.set(1,0,0),a));return this}
+  rotateY(a){this.quaternion.multiply(_q1.setFromAxisAngle(_ax.set(0,1,0),a));return this}
+  rotateZ(a){this.quaternion.multiply(_q1.setFromAxisAngle(_ax.set(0,0,1),a));return this}
+  translateY(d){const q=this.quaternion,x=q._x,y=q._y,z=q._z,w=q._w;
+    this.position.x+=d*2*(x*y-z*w);this.position.y+=d*(1-2*(x*x+z*z));this.position.z+=d*2*(y*z+x*w);return this}
+  lookAt(x,y,z){
+    const t=typeof x==='number'?_v1.set(x,y,z):x;
+    _m1.identity().lookAt(this.position,t,_up);_m1.setFromRotationToQuaternion(this.quaternion);return this;
+  }
+}
+class Group extends Object3D{constructor(){super();this.isGroup=true}}
+class Scene extends Object3D{constructor(){super();this.fog=null;this.background=null;this.environment=null;this.isScene=true}}
+class Fog{constructor(c,n=1,f=1000){this.color=new Color(c);this.near=n;this.far=f}}
+class Mesh extends Object3D{constructor(g,m){super();this.geometry=g;this.material=m;this.isMesh=true}}
+class InstancedMesh extends Mesh{
+  constructor(g,m,count){super(g,m);this.count=count;this.instanceMatrix=new Float32Array(count*16);this.instanceColor=null;this.isInstancedMesh=true;this._dirty=true;this._cdirty=true;
+    for(let i=0;i<count;i++){this.instanceMatrix[i*16]=this.instanceMatrix[i*16+5]=this.instanceMatrix[i*16+10]=this.instanceMatrix[i*16+15]=1}}
+  setMatrixAt(i,m){this.instanceMatrix.set(m.e,i*16);this._dirty=true;this._bs=null}
+  setColorAt(i,c){if(!this.instanceColor)this.instanceColor=new Float32Array(this.count*3).fill(1);this.instanceColor[i*3]=c.r;this.instanceColor[i*3+1]=c.g;this.instanceColor[i*3+2]=c.b;this._cdirty=true}
+  dispose(){if(this._free)this._free()}
+}
+class Points extends Object3D{constructor(g,m){super();this.geometry=g;this.material=m;this.isPoints=true}}
+class PerspectiveCamera extends Object3D{
+  constructor(fov=50,aspect=1,near=0.1,far=2000){super();this.fov=fov;this.aspect=aspect;this.near=near;this.far=far;this.zoom=1;this.view=null;
+    this.projectionMatrix=new Matrix4();this.matrixWorldInverse=new Matrix4();this.isCamera=true;this.updateProjectionMatrix()}
+  updateProjectionMatrix(){
+    const near=this.near;let top=near*Math.tan(this.fov*Math.PI/360)/this.zoom,height=2*top,width=this.aspect*height,left=-0.5*width;const v=this.view;
+    if(v&&v.enabled){left+=v.offsetX*width/v.fullWidth;top-=v.offsetY*height/v.fullHeight;width*=v.width/v.fullWidth;height*=v.height/v.fullHeight}
+    this.projectionMatrix.makePerspective(left,left+width,top,top-height,near,this.far);
+  }
+  setViewOffset(fw,fh,x,y,w,h){this.view={enabled:true,fullWidth:fw,fullHeight:fh,offsetX:x,offsetY:y,width:w,height:h};this.updateProjectionMatrix()}
+  clearViewOffset(){if(this.view&&this.view.enabled){this.view.enabled=false;this.updateProjectionMatrix()}}
+}
+class HemisphereLight extends Object3D{constructor(sky,ground,i=1){super();this.color=new Color(sky);this.groundColor=new Color(ground);this.intensity=i;this.isLight=true;this.isHemisphereLight=true}}
+class DirectionalLight extends Object3D{
+  constructor(c,i=1){super();this.color=new Color(c);this.intensity=i;this.target=new Object3D();this.isLight=true;this.isDirectionalLight=true;
+    this.shadow={mapSize:{x:512,y:512,set(x,y){this.x=x;this.y=y}},camera:{left:-5,right:5,top:5,bottom:-5,near:0.5,far:500},bias:0,normalBias:0}}
+}
+let _mid=0;
+class Material{
+  constructor(p){this.id=++_mid;this.transparent=false;this.opacity=1;this.side=0;this.depthWrite=true;this.depthTest=true;this.blending=1;this.fog=true;this.vertexColors=false;this.visible=true;this.color=new Color(0xffffff);
+    if(p)this.setValues(p)}
+  setValues(p){for(const k in p){const v=p[k];if(v===undefined)continue;if((k==='color'||k==='emissive')&&!(v instanceof Color))this[k]=new Color(v);else this[k]=v}}
+  dispose(){}
+}
+class MeshStandardMaterial extends Material{constructor(p){super();this.type='MeshStandardMaterial';this.isMeshStandardMaterial=true;this.emissive=new Color(0);this.emissiveIntensity=1;this.roughness=1;this.metalness=0;this.flatShading=false;this.envMap=null;this.envMapIntensity=1;this.setValues(p)}}
+class MeshBasicMaterial extends Material{constructor(p){super();this.type='MeshBasicMaterial';this.isMeshBasicMaterial=true;this.map=null;this.setValues(p)}}
+class PointsMaterial extends Material{constructor(p){super();this.type='PointsMaterial';this.isPointsMaterial=true;this.size=1;this.sizeAttenuation=true;this.setValues(p)}}
+class ShaderMaterial extends Material{constructor(p){super();this.type='ShaderMaterial';this.isShaderMaterial=true;this.uniforms={};this.vertexShader='';this.fragmentShader='';this.setValues(p)}}
+class CanvasTexture{constructor(c){this.image=c;this.isTexture=true;this.needsUpdate=true}}
+class PMREMGenerator{constructor(){}fromScene(){return{texture:{isEnvTexture:true}}}dispose(){}}
+Object.assign(T,{Object3D,Group,Scene,Fog,Mesh,InstancedMesh,Points,PerspectiveCamera,HemisphereLight,DirectionalLight,Material,MeshStandardMaterial,MeshBasicMaterial,PointsMaterial,ShaderMaterial,CanvasTexture,PMREMGenerator,
+  FrontSide:0,BackSide:1,DoubleSide:2,NormalBlending:1,AdditiveBlending:2,PCFSoftShadowMap:2,ACESFilmicToneMapping:4});
+/* ===== mini3: геометрії ===== */
+class BufferAttribute{constructor(a,s){this.array=a;this.itemSize=s;this.count=a.length/s;this.needsUpdate=false;this._ver=0}}
+class BufferGeometry{
+  constructor(){this.attributes={};this.index=null;this.boundingBox=null;this.boundingSphere=null;this.parameters={};this.type='BufferGeometry'}
+  setAttribute(n,a){this.attributes[n]=a;return this}
+  setIndex(a){this.index=a instanceof BufferAttribute?a:new BufferAttribute(a,1);return this}
+  computeBoundingBox(){
+    const p=this.attributes.position.array;let a=Infinity,b=Infinity,c=Infinity,d=-Infinity,e=-Infinity,f=-Infinity;
+    for(let i=0;i<p.length;i+=3){a=Math.min(a,p[i]);b=Math.min(b,p[i+1]);c=Math.min(c,p[i+2]);d=Math.max(d,p[i]);e=Math.max(e,p[i+1]);f=Math.max(f,p[i+2])}
+    this.boundingBox={min:{x:a,y:b,z:c},max:{x:d,y:e,z:f}};return this;
+  }
+  computeBoundingSphere(){
+    if(!this.boundingBox)this.computeBoundingBox();const b=this.boundingBox,cx=(b.min.x+b.max.x)/2,cy=(b.min.y+b.max.y)/2,cz=(b.min.z+b.max.z)/2,p=this.attributes.position.array;let r=0;
+    for(let i=0;i<p.length;i+=3)r=Math.max(r,(p[i]-cx)**2+(p[i+1]-cy)**2+(p[i+2]-cz)**2);
+    this.boundingSphere={center:{x:cx,y:cy,z:cz},radius:Math.sqrt(r)};return this;
+  }
+  _touch(){this.boundingBox=null;this.boundingSphere=null;for(const k in this.attributes){this.attributes[k].needsUpdate=true}}
+  translate(x,y,z){const p=this.attributes.position.array;for(let i=0;i<p.length;i+=3){p[i]+=x;p[i+1]+=y;p[i+2]+=z}this._touch();return this}
+  _rot(fn){for(const n of['position','normal']){const a=this.attributes[n];if(!a)continue;const p=a.array;for(let i=0;i<p.length;i+=3){const r=fn(p[i],p[i+1],p[i+2]);p[i]=r[0];p[i+1]=r[1];p[i+2]=r[2]}}this._touch();return this}
+  rotateX(a){const c=Math.cos(a),s=Math.sin(a);return this._rot((x,y,z)=>[x,y*c-z*s,y*s+z*c])}
+  rotateY(a){const c=Math.cos(a),s=Math.sin(a);return this._rot((x,y,z)=>[x*c+z*s,y,-x*s+z*c])}
+  rotateZ(a){const c=Math.cos(a),s=Math.sin(a);return this._rot((x,y,z)=>[x*c-y*s,x*s+y*c,z])}
+  dispose(){}
+}
+function mkGeo(type,params,pos,nor,uv,idx){
+  const g=new BufferGeometry();g.type=type;g.parameters=params;
+  g.setAttribute('position',new BufferAttribute(new Float32Array(pos),3));g.setAttribute('normal',new BufferAttribute(new Float32Array(nor),3));
+  if(uv)g.setAttribute('uv',new BufferAttribute(new Float32Array(uv),2));
+  if(idx)g.setIndex(new BufferAttribute((pos.length/3>65535?new Uint32Array(idx):new Uint16Array(idx)),1));
+  return g;
+}
+const G_=(type,params,build)=>{const o={pos:[],nor:[],uv:[],idx:[]};build(o);return mkGeo(type,params,o.pos,o.nor,o.uv,o.idx)};
+class BoxGeometry extends BufferGeometry{constructor(w=1,h=1,d=1){super();const a=w/2,b=h/2,c=d/2;
+  const F=[[[1,0,0],[a,-b,c,a,-b,-c,a,b,-c,a,b,c]],[[-1,0,0],[-a,-b,-c,-a,-b,c,-a,b,c,-a,b,-c]],[[0,1,0],[-a,b,c,a,b,c,a,b,-c,-a,b,-c]],[[0,-1,0],[-a,-b,-c,a,-b,-c,a,-b,c,-a,-b,c]],[[0,0,1],[-a,-b,c,a,-b,c,a,b,c,-a,b,c]],[[0,0,-1],[a,-b,-c,-a,-b,-c,-a,b,-c,a,b,-c]]];
+  const g=G_('BoxGeometry',{width:w,height:h,depth:d},o=>{let n=0;for(const[nm,v]of F){for(let i=0;i<4;i++){o.pos.push(v[i*3],v[i*3+1],v[i*3+2]);o.nor.push(...nm);o.uv.push(i===0||i===3?0:1,i<2?0:1)}o.idx.push(n,n+1,n+2,n,n+2,n+3);n+=4}});
+  Object.assign(this,g);Object.setPrototypeOf(this,BoxGeometry.prototype)}}
+function make(cls,g){return g}
+class SphereGeometry extends BufferGeometry{constructor(r=1,ws=32,hs=16,ps=0,pl=Math.PI*2,ts=0,tl=Math.PI){super();
+  ws=Math.max(3,ws|0);hs=Math.max(2,hs|0);const te=ts+tl;
+  const g=G_('SphereGeometry',{radius:r,widthSegments:ws,heightSegments:hs,phiStart:ps,phiLength:pl,thetaStart:ts,thetaLength:tl},o=>{
+    const grid=[];let n=0;
+    for(let iy=0;iy<=hs;iy++){const row=[],v=iy/hs;for(let ix=0;ix<=ws;ix++){const u=ix/ws,
+      x=-r*Math.cos(ps+u*pl)*Math.sin(ts+v*tl),y=r*Math.cos(ts+v*tl),z=r*Math.sin(ps+u*pl)*Math.sin(ts+v*tl),l=Math.hypot(x,y,z)||1;
+      o.pos.push(x,y,z);o.nor.push(x/l,y/l,z/l);o.uv.push(u,1-v);row.push(n++)}grid.push(row)}
+    for(let iy=0;iy<hs;iy++)for(let ix=0;ix<ws;ix++){const a=grid[iy][ix+1],b=grid[iy][ix],c=grid[iy+1][ix],d=grid[iy+1][ix+1];
+      if(iy!==0||ts>0)o.idx.push(a,b,d);if(iy!==hs-1||te<Math.PI)o.idx.push(b,c,d)}});
+  Object.assign(this,g)}}
+class CylinderGeometry extends BufferGeometry{constructor(rt=1,rb=1,h=1,rs=8,hs=1,open=false,ts=0,tl=Math.PI*2){super();rs=Math.max(3,rs|0);
+  const g=G_('CylinderGeometry',{radiusTop:rt,radiusBottom:rb,height:h,radialSegments:rs,heightSegments:hs,openEnded:open,thetaStart:ts,thetaLength:tl},o=>{
+    const grid=[],hh=h/2;let n=0;const slope=(rb-rt)/h;
+    for(let y=0;y<=hs;y++){const row=[],v=y/hs,rad=v*(rb-rt)+rt;for(let x=0;x<=rs;x++){const u=x/rs,th=u*tl+ts,s=Math.sin(th),c=Math.cos(th),l=Math.hypot(s,slope,c);
+      o.pos.push(rad*s,-v*h+hh,rad*c);o.nor.push(s/l,slope/l,c/l);o.uv.push(u,1-v);row.push(n++)}grid.push(row)}
+    for(let x=0;x<rs;x++)for(let y=0;y<hs;y++){const a=grid[y][x],b=grid[y+1][x],c=grid[y+1][x+1],d=grid[y][x+1];if(rt>0||y!==0)o.idx.push(a,b,d);if(rb>0||y!==hs-1)o.idx.push(b,c,d)}
+    if(!open)for(const top of[true,false]){const rad=top?rt:rb;if(rad<=0)continue;const sg=top?1:-1,ci=n++;o.pos.push(0,hh*sg,0);o.nor.push(0,sg,0);o.uv.push(.5,.5);
+      const r0=n;for(let x=0;x<=rs;x++){const th=x/rs*tl+ts;o.pos.push(rad*Math.sin(th),hh*sg,rad*Math.cos(th));o.nor.push(0,sg,0);o.uv.push(.5,.5);n++}
+      for(let x=0;x<rs;x++){if(top)o.idx.push(ci,r0+x,r0+x+1);else o.idx.push(ci,r0+x+1,r0+x)}}
+  });Object.assign(this,g)}}
+class ConeGeometry extends CylinderGeometry{constructor(r=1,h=1,rs=8,hs=1,open=false){super(0,r,h,rs,hs,open);this.type='ConeGeometry'}}
+class TorusGeometry extends BufferGeometry{constructor(R=1,tube=0.4,rs=12,ts=48,arc=Math.PI*2){super();
+  const g=G_('TorusGeometry',{radius:R,tube,radialSegments:rs,tubularSegments:ts,arc},o=>{
+    for(let j=0;j<=rs;j++)for(let i=0;i<=ts;i++){const u=i/ts*arc,v=j/rs*Math.PI*2,x=(R+tube*Math.cos(v))*Math.cos(u),y=(R+tube*Math.cos(v))*Math.sin(u),z=tube*Math.sin(v);
+      o.pos.push(x,y,z);const cx=R*Math.cos(u),cy=R*Math.sin(u),nx=x-cx,ny=y-cy,nz=z,l=Math.hypot(nx,ny,nz)||1;o.nor.push(nx/l,ny/l,nz/l);o.uv.push(i/ts,j/rs)}
+    for(let j=1;j<=rs;j++)for(let i=1;i<=ts;i++){const a=(ts+1)*j+i-1,b=(ts+1)*(j-1)+i-1,c=(ts+1)*(j-1)+i,d=(ts+1)*j+i;o.idx.push(a,b,d,b,c,d)}
+  });Object.assign(this,g)}}
+class PlaneGeometry extends BufferGeometry{constructor(w=1,h=1,gx=1,gy=1){super();
+  const g=G_('PlaneGeometry',{width:w,height:h,widthSegments:gx,heightSegments:gy},o=>{
+    const hw=w/2,hh=h/2,sw=w/gx,sh=h/gy,g1=gx+1;
+    for(let iy=0;iy<=gy;iy++)for(let ix=0;ix<=gx;ix++){o.pos.push(ix*sw-hw,-(iy*sh-hh),0);o.nor.push(0,0,1);o.uv.push(ix/gx,1-iy/gy)}
+    for(let iy=0;iy<gy;iy++)for(let ix=0;ix<gx;ix++){const a=ix+g1*iy,b=ix+g1*(iy+1),c=ix+1+g1*(iy+1),d=ix+1+g1*iy;o.idx.push(a,b,d,b,c,d)}
+  });Object.assign(this,g)}}
+function polyhedron(type,V,F,r,detail){
+  const n=detail+1;const o={pos:[],nor:[],uv:[],idx:[]};let k=0;
+  const nv=V.map(v=>{const l=Math.hypot(...v);return v.map(c=>c/l)});
+  const P=(a,b,c,i,j)=>{const u=i/n,v=j/n;const p=[0,1,2].map(t=>a[t]+(b[t]-a[t])*u+(c[t]-a[t])*v);const l=Math.hypot(...p)||1;return p.map(x=>x/l)};
+  const tri=(p,q,s)=>{
+    const cx=p[0]+q[0]+s[0],cy=p[1]+q[1]+s[1],cz=p[2]+q[2]+s[2];
+    const e1=[q[0]-p[0],q[1]-p[1],q[2]-p[2]],e2=[s[0]-p[0],s[1]-p[1],s[2]-p[2]];
+    const fn=[e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]];
+    if(fn[0]*cx+fn[1]*cy+fn[2]*cz<0){const t=q;q=s;s=t;fn[0]*=-1;fn[1]*=-1;fn[2]*=-1}
+    const fl=Math.hypot(...fn)||1;
+    for(const v of[p,q,s]){o.pos.push(v[0]*r,v[1]*r,v[2]*r);if(detail===0)o.nor.push(fn[0]/fl,fn[1]/fl,fn[2]/fl);else o.nor.push(v[0],v[1],v[2]);o.uv.push(0,0);o.idx.push(k++)}
+  };
+  for(const f of F){const a=nv[f[0]],b=nv[f[1]],c=nv[f[2]];
+    for(let i=0;i<n;i++)for(let j=0;j<n-i;j++){tri(P(a,b,c,i,j),P(a,b,c,i+1,j),P(a,b,c,i,j+1));if(i+j<n-1)tri(P(a,b,c,i+1,j),P(a,b,c,i+1,j+1),P(a,b,c,i,j+1))}}
+  return mkGeo(type,{radius:r,detail},o.pos,o.nor,o.uv,o.idx);
+}
+class IcosahedronGeometry extends BufferGeometry{constructor(r=1,d=0){super();const t=(1+Math.sqrt(5))/2;
+  const V=[[-1,t,0],[1,t,0],[-1,-t,0],[1,-t,0],[0,-1,t],[0,1,t],[0,-1,-t],[0,1,-t],[t,0,-1],[t,0,1],[-t,0,-1],[-t,0,1]];
+  const I=[0,11,5,0,5,1,0,1,7,0,7,10,0,10,11,1,5,9,5,11,4,11,10,2,10,7,6,7,1,8,3,9,4,3,4,2,3,2,6,3,6,8,3,8,9,4,9,5,2,4,11,6,2,10,8,6,7,9,8,1],F=[];for(let i=0;i<I.length;i+=3)F.push([I[i],I[i+1],I[i+2]]);
+  Object.assign(this,polyhedron('IcosahedronGeometry',V,F,r,d))}}
+class OctahedronGeometry extends BufferGeometry{constructor(r=1,d=0){super();
+  const V=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]],F=[[0,2,4],[0,4,3],[0,3,5],[0,5,2],[1,2,5],[1,5,3],[1,3,4],[1,4,2]];
+  Object.assign(this,polyhedron('OctahedronGeometry',V,F,r,d))}}
+class CapsuleGeometry extends BufferGeometry{constructor(r=1,len=1,cs=4,rs=8){super();cs=Math.max(1,cs|0);rs=Math.max(3,rs|0);
+  const prof=[];for(let i=0;i<=cs;i++){const a=-Math.PI/2+i/cs*Math.PI/2;prof.push([Math.cos(a)*r,-len/2+Math.sin(a)*r,Math.cos(a),Math.sin(a)])}
+  for(let i=0;i<=cs;i++){const a=i/cs*Math.PI/2;prof.push([Math.cos(a)*r,len/2+Math.sin(a)*r,Math.cos(a),Math.sin(a)])}
+  const g=G_('CapsuleGeometry',{radius:r,length:len,capSegments:cs,radialSegments:rs},o=>{
+    for(const[rr,y,nr,ny]of prof)for(let x=0;x<=rs;x++){const th=x/rs*Math.PI*2,s=Math.sin(th),c=Math.cos(th);o.pos.push(rr*s,y,rr*c);o.nor.push(nr*s,ny,nr*c);o.uv.push(x/rs,0)}
+    for(let j=0;j<prof.length-1;j++)for(let x=0;x<rs;x++){const a=j*(rs+1)+x,b=(j+1)*(rs+1)+x,c=(j+1)*(rs+1)+x+1,d=j*(rs+1)+x+1;o.idx.push(b,a,c,a,d,c)}
+  });Object.assign(this,g)}}
+class Shape{constructor(){this.points=[]}moveTo(x,y){this.points.push([x,y]);return this}lineTo(x,y){this.points.push([x,y]);return this}closePath(){return this}}
+class ExtrudeGeometry extends BufferGeometry{constructor(shape,opt={}){super();const P=shape.points,depth=opt.depth??1,n=P.length;
+  let cx=0,cy=0;for(const p of P){cx+=p[0];cy+=p[1]}cx/=n;cy/=n;
+  const g=G_('ExtrudeGeometry',{depth},o=>{let k=0;
+    const v=(x,y,z,nx,ny,nz)=>{o.pos.push(x,y,z);o.nor.push(nx,ny,nz);o.uv.push(0,0);return k++};
+    const cf=v(cx,cy,depth,0,0,1),f0=k;for(const p of P)v(p[0],p[1],depth,0,0,1);for(let i=0;i<n;i++)o.idx.push(cf,f0+i,f0+(i+1)%n);
+    const cb=v(cx,cy,0,0,0,-1),b0=k;for(const p of P)v(p[0],p[1],0,0,0,-1);for(let i=0;i<n;i++)o.idx.push(cb,b0+(i+1)%n,b0+i);
+    for(let i=0;i<n;i++){const p=P[i],q=P[(i+1)%n],dx=q[0]-p[0],dy=q[1]-p[1],l=Math.hypot(dx,dy)||1,nx=dy/l,ny=-dx/l;
+      const a=v(p[0],p[1],0,nx,ny,0),b=v(q[0],q[1],0,nx,ny,0),c=v(q[0],q[1],depth,nx,ny,0),d=v(p[0],p[1],depth,nx,ny,0);o.idx.push(a,b,c,a,c,d)}
+  });Object.assign(this,g)}}
+Object.assign(T,{BufferAttribute,BufferGeometry,BoxGeometry,SphereGeometry,CylinderGeometry,ConeGeometry,TorusGeometry,PlaneGeometry,IcosahedronGeometry,OctahedronGeometry,CapsuleGeometry,Shape,ExtrudeGeometry});
+/* ===== mini3: WebGL2-рендерер (шейдери) ===== */
+const VS_STD=`#version 300 es
+layout(location=0) in vec3 position;
+layout(location=1) in vec3 normal;
+layout(location=2) in vec3 color;
+layout(location=3) in vec2 uv;
+#ifdef INSTANCED
+layout(location=4) in vec4 iM0;layout(location=5) in vec4 iM1;layout(location=6) in vec4 iM2;layout(location=7) in vec4 iM3;
+layout(location=8) in vec3 iColor;
+#endif
+uniform mat4 uModel;uniform mat4 uVP;uniform mat3 uNormalMat;uniform mat4 uLightVP;uniform float uNormalBias;
+out vec3 vWorld;out vec3 vNormal;out vec3 vCol;out vec2 vUv;out vec4 vShadow;out float vDepth;
+void main(){
+  vec4 lp=vec4(position,1.0);vec3 ln=normal;
+#ifdef INSTANCED
+  mat4 im=mat4(iM0,iM1,iM2,iM3);mat3 m3=mat3(im);
+  lp=im*lp;ln=m3*(ln/vec3(dot(m3[0],m3[0]),dot(m3[1],m3[1]),dot(m3[2],m3[2])));
+#endif
+  vec4 wp=uModel*lp;vWorld=wp.xyz;vNormal=uNormalMat*ln;
+  vec3 c=vec3(1.0);
+#ifdef VCOLOR
+  c*=color;
+#endif
+#ifdef INST_COLOR
+  c*=iColor;
+#endif
+  vCol=c;vUv=uv;
+  vShadow=uLightVP*vec4(wp.xyz+normalize(vNormal)*uNormalBias,1.0);
+  gl_Position=uVP*wp;vDepth=gl_Position.w;
+}`;
+const FS_STD=`#version 300 es
+precision highp float;precision highp sampler2D;
+in vec3 vWorld;in vec3 vNormal;in vec3 vCol;in vec2 vUv;in vec4 vShadow;in float vDepth;
+out vec4 outColor;
+uniform vec3 uColor;uniform float uOpacity;uniform vec3 uEmissive;uniform float uEmI;uniform float uRough;uniform float uMetal;uniform float uEnv;
+uniform vec3 uCamPos;
+uniform vec3 uHemiSky;uniform vec3 uHemiGround;uniform float uHemiI;
+uniform vec3 uSunDir;uniform vec3 uSunColor;uniform float uSunI;
+uniform sampler2D uShadowTex;uniform float uShadowOn;uniform vec2 uTexel;uniform float uShadowBias;
+uniform sampler2D uMap;
+uniform vec3 uFogColor;uniform float uFogNear;uniform float uFogFar;uniform float uFogOn;
+uniform float uExposure;uniform float uTone;
+vec3 toLin(vec3 c){return pow(c,vec3(2.2));}
+vec3 aces(vec3 v){
+  v*=uExposure/0.6;
+  v=mat3(0.59719,0.07600,0.02840,0.35458,0.90834,0.13383,0.04823,0.01566,0.83777)*v;
+  vec3 a=v*(v+0.0245786)-0.000090537;vec3 b=v*(0.983729*v+0.4329510)+0.238081;v=a/b;
+  v=mat3(1.60475,-0.10208,-0.00327,-0.53108,1.10813,-0.07276,-0.07367,-0.00605,1.07602)*v;
+  return clamp(v,0.0,1.0);
+}
+float shadowFactor(){
+  vec3 p=vShadow.xyz/vShadow.w*0.5+0.5;
+  if(p.z>1.0||p.x<0.0||p.x>1.0||p.y<0.0||p.y>1.0)return 1.0;
+  float z=p.z+uShadowBias,s=0.0;
+  for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){float d=texture(uShadowTex,p.xy+vec2(float(x),float(y))*uTexel).r;s+=(z>d)?0.0:1.0;}
+  return s/9.0;
+}
+void main(){
+  vec3 albedo=toLin(uColor*vCol);float alpha=uOpacity;
+#ifdef MAP
+  vec4 tc=texture(uMap,vUv);albedo*=toLin(tc.rgb);alpha*=tc.a;
+#endif
+  vec3 col;
+#ifdef BASIC
+  col=albedo;
+#else
+  vec3 V=normalize(uCamPos-vWorld);vec3 N;
+#ifdef FLAT
+  N=normalize(cross(dFdx(vWorld),dFdy(vWorld)));
+#else
+  N=normalize(vNormal);if(dot(N,V)<0.0)N=-N;
+#endif
+  vec3 hs=toLin(uHemiSky),hg=toLin(uHemiGround);
+  vec3 amb=mix(hg,hs,0.5*N.y+0.5)*uHemiI;
+  float ndl=max(dot(N,uSunDir),0.0),sh=1.0;
+#ifdef SHADOW
+  if(uShadowOn>0.5&&ndl>0.0)sh=shadowFactor();
+#endif
+  vec3 sunC=toLin(uSunColor)*uSunI;
+  vec3 diff=albedo*(1.0-uMetal);
+  col=diff*(amb*0.50+sunC*ndl*sh*0.33);
+  vec3 f0=mix(vec3(0.04),albedo,uMetal);
+  vec3 H=normalize(uSunDir+V);float shin=mix(6.0,180.0,pow(1.0-uRough,2.0));
+  float spec=pow(max(dot(N,H),0.0),shin)*(1.0-uRough);
+  col+=f0*sunC*spec*ndl*sh*0.22;
+  float envI=max(uEnv,uMetal*0.7);
+  if(envI>0.001){
+    vec3 R=reflect(-V,N);float fr=pow(1.0-max(dot(N,V),0.0),3.0);
+    vec3 envC=mix(hg,hs,0.5*R.y+0.5)*(uHemiI*0.6+0.25);
+    col+=envC*(f0*0.6+(1.0-f0)*fr*0.9)*envI*(1.0-uRough*0.6);
+  }
+  col+=toLin(uEmissive)*uEmI;
+#endif
+  if(uTone>0.5)col=aces(col);
+  col=pow(clamp(col,0.0,1.0),vec3(1.0/2.2));
+  col=mix(col,uFogColor,smoothstep(uFogNear,uFogFar,vDepth)*uFogOn);
+  outColor=vec4(col,alpha);
+}`;
+const VS_DEPTH=`#version 300 es
+layout(location=0) in vec3 position;
+#ifdef INSTANCED
+layout(location=4) in vec4 iM0;layout(location=5) in vec4 iM1;layout(location=6) in vec4 iM2;layout(location=7) in vec4 iM3;
+#endif
+uniform mat4 uModel;uniform mat4 uLightVP;
+void main(){vec4 lp=vec4(position,1.0);
+#ifdef INSTANCED
+  lp=mat4(iM0,iM1,iM2,iM3)*lp;
+#endif
+  gl_Position=uLightVP*uModel*lp;}`;
+const FS_DEPTH=`#version 300 es
+precision highp float;out vec4 o;void main(){o=vec4(1.0);}`;
+const VS_PTS=`#version 300 es
+layout(location=0) in vec3 position;layout(location=2) in vec3 color;
+uniform mat4 uModel;uniform mat4 uVP;uniform float uSize;uniform float uScale;uniform float uAtten;
+out vec3 vCol;out float vDepth;
+void main(){vec4 p=uVP*uModel*vec4(position,1.0);gl_Position=p;vDepth=p.w;
+#ifdef VCOLOR
+  vCol=color;
+#else
+  vCol=vec3(1.0);
+#endif
+  gl_PointSize=max(1.0,uSize*(uAtten>0.5?uScale/max(p.w,0.1):1.0));}`;
+const FS_PTS=`#version 300 es
+precision highp float;in vec3 vCol;in float vDepth;out vec4 outColor;
+uniform vec3 uColor;uniform float uOpacity;uniform vec3 uFogColor;uniform float uFogNear;uniform float uFogFar;uniform float uFogOn;
+void main(){vec2 d=gl_PointCoord-0.5;float r=length(d);if(r>0.5)discard;
+  vec3 col=uColor*vCol;col=mix(col,uFogColor,smoothstep(uFogNear,uFogFar,vDepth)*uFogOn);
+  outColor=vec4(col,uOpacity*(1.0-smoothstep(0.25,0.5,r)));}`;
+/* ===== mini3: WebGLRenderer ===== */
+class WebGLRenderer{
+  constructor(o={}){
+    const canvas=o.canvas||document.createElement('canvas');this.domElement=canvas;
+    const gl=canvas.getContext('webgl2',{antialias:o.antialias!==false,powerPreference:o.powerPreference||'default',alpha:false,stencil:false});
+    if(!gl)throw new Error('WebGL2 недоступний');
+    this.gl=gl;this.shadowMap={enabled:false,type:2};this.toneMapping=0;this.toneMappingExposure=1;this._pr=1;this._w=canvas.width||300;this._h=canvas.height||150;this._style=false;
+    this._progs=new Map();this._frame=0;this._white=null;this._texs=new WeakMap();this._shadow=null;
+    gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);
+    this._vp=new Matrix4();this._view=new Matrix4();this._lvp=new Matrix4();this._tmp=new Matrix4();
+    BufferGeometry.prototype.dispose=function(){if(this._free)this._free();};
+  }
+  setPixelRatio(r){this._pr=r;this.setSize(this._w,this._h,this._style)}
+  setSize(w,h,style){this._w=w;this._h=h;this._style=style;const c=this.domElement;c.width=Math.max(1,Math.floor(w*this._pr));c.height=Math.max(1,Math.floor(h*this._pr));
+    if(style!==false){c.style.width=w+'px';c.style.height=h+'px'}}
+  /* ---------- програми ---------- */
+  _compile(vs,fs){
+    const gl=this.gl,mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error('shader: '+gl.getShaderInfoLog(sh)+'\n'+s.slice(0,200));return sh};
+    const p=gl.createProgram();gl.attachShader(p,mk(gl.VERTEX_SHADER,vs));gl.attachShader(p,mk(gl.FRAGMENT_SHADER,fs));
+    gl.bindAttribLocation(p,0,'position');gl.bindAttribLocation(p,1,'normal');gl.bindAttribLocation(p,2,'color');gl.bindAttribLocation(p,3,'uv');
+    gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error('link: '+gl.getProgramInfoLog(p));
+    return{p,u:{},frame:-1};
+  }
+  _def(src,defs){return src.replace('#version 300 es\n','#version 300 es\n'+defs.map(d=>'#define '+d+'\n').join(''))}
+  _prog(key,vs,fs,defs){let r=this._progs.get(key);if(!r){r=this._compile(this._def(vs,defs),this._def(fs,defs));this._progs.set(key,r)}return r}
+  _loc(pr,n){let l=pr.u[n];if(l===undefined){l=this.gl.getUniformLocation(pr.p,n);pr.u[n]=l}return l}
+  _userProg(m){
+    const key='U'+m.vertexShader+'|'+m.fragmentShader;let r=this._progs.get(key);if(r)return r;
+    const strip=s=>s.replace(/#include\s*<colorspace_fragment>/g,'').replace(/#include\s*<[^>]+>/g,'');
+    const vs='#version 300 es\nprecision highp float;\nin vec3 position;\nuniform mat4 modelViewMatrix;uniform mat4 projectionMatrix;\n'+strip(m.vertexShader).replace(/\bvarying\b/g,'out');
+    const fs='#version 300 es\nprecision highp float;\nout vec4 fragColor;\n#define gl_FragColor fragColor\n'+strip(m.fragmentShader).replace(/\bvarying\b/g,'in');
+    r=this._compile(vs,fs);this._progs.set(key,r);return r;
+  }
+  /* ---------- GPU-ресурси геометрії ---------- */
+  _geo(g){
+    const gl=this.gl;let r=g._gpu;
+    if(!r){r=g._gpu={bufs:{},vao:null,ibo:null,itype:0,vaos:[]};
+      g._free=()=>{const q=g._gpu;if(!q)return;for(const k in q.bufs)gl.deleteBuffer(q.bufs[k]);if(q.ibo)gl.deleteBuffer(q.ibo);gl.deleteVertexArray(q.vao);for(const v of q.vaos)gl.deleteVertexArray(v);g._gpu=null}}
+    const names={position:0,normal:1,color:2,uv:3};
+    for(const n in names){const a=g.attributes[n];if(!a)continue;
+      let b=r.bufs[n];if(!b){b=r.bufs[n]=gl.createBuffer();a.needsUpdate=true}
+      if(a.needsUpdate){gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,a.array,gl.DYNAMIC_DRAW);a.needsUpdate=false}}
+    if(g.index){if(!r.ibo){r.ibo=gl.createBuffer();g.index.needsUpdate=true}
+      if(g.index.needsUpdate){gl.bindVertexArray(null);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,r.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,g.index.array,gl.STATIC_DRAW);g.index.needsUpdate=false}
+      r.itype=g.index.array instanceof Uint32Array?gl.UNSIGNED_INT:gl.UNSIGNED_SHORT}
+    return r;
+  }
+  _bindAttrs(g,r){
+    const gl=this.gl,names={position:[0,3],normal:[1,3],color:[2,3],uv:[3,2]};
+    for(const n in names){const a=g.attributes[n];if(!a)continue;gl.bindBuffer(gl.ARRAY_BUFFER,r.bufs[n]);gl.enableVertexAttribArray(names[n][0]);gl.vertexAttribPointer(names[n][0],a.itemSize,gl.FLOAT,false,0,0)}
+    if(r.ibo)gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,r.ibo);
+  }
+  _vao(g){const r=this._geo(g);if(!r.vao){const gl=this.gl;r.vao=gl.createVertexArray();gl.bindVertexArray(r.vao);this._bindAttrs(g,r);gl.bindVertexArray(null)}return r}
+  _instVao(mesh){
+    const gl=this.gl,g=mesh.geometry,r=this._geo(g);let q=mesh._gpu;
+    if(!q){q=mesh._gpu={vao:gl.createVertexArray(),mb:gl.createBuffer(),cb:null};
+      mesh._free=()=>{const z=mesh._gpu;if(!z)return;gl.deleteVertexArray(z.vao);gl.deleteBuffer(z.mb);if(z.cb)gl.deleteBuffer(z.cb);mesh._gpu=null};
+      gl.bindVertexArray(q.vao);this._bindAttrs(g,r);
+      gl.bindBuffer(gl.ARRAY_BUFFER,q.mb);for(let i=0;i<4;i++){gl.enableVertexAttribArray(4+i);gl.vertexAttribPointer(4+i,4,gl.FLOAT,false,64,i*16);gl.vertexAttribDivisor(4+i,1)}
+      gl.bindVertexArray(null);mesh._dirty=true}
+    if(mesh._dirty){gl.bindBuffer(gl.ARRAY_BUFFER,q.mb);gl.bufferData(gl.ARRAY_BUFFER,mesh.instanceMatrix,gl.DYNAMIC_DRAW);mesh._dirty=false}
+    if(mesh.instanceColor){
+      if(!q.cb){q.cb=gl.createBuffer();mesh._cdirty=true;gl.bindVertexArray(q.vao);gl.bindBuffer(gl.ARRAY_BUFFER,q.cb);gl.enableVertexAttribArray(8);gl.vertexAttribPointer(8,3,gl.FLOAT,false,0,0);gl.vertexAttribDivisor(8,1);gl.bindVertexArray(null)}
+      if(mesh._cdirty){gl.bindBuffer(gl.ARRAY_BUFFER,q.cb);gl.bufferData(gl.ARRAY_BUFFER,mesh.instanceColor,gl.DYNAMIC_DRAW);mesh._cdirty=false}}
+    return q.vao;
+  }
+  _tex(t){
+    const gl=this.gl;let r=this._texs.get(t);
+    if(!r){r=gl.createTexture();this._texs.set(t,r);t.needsUpdate=true}
+    gl.bindTexture(gl.TEXTURE_2D,r);
+    if(t.needsUpdate){gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,t.image);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);t.needsUpdate=false}
+  }
+  /* ---------- тіні ---------- */
+  _shadowTarget(sz){
+    const gl=this.gl;let s=this._shadow;
+    if(s&&s.size===sz)return s;
+    if(s){gl.deleteTexture(s.tex);gl.deleteFramebuffer(s.fbo)}
+    const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);gl.texStorage2D(gl.TEXTURE_2D,1,gl.DEPTH_COMPONENT24,sz,sz);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    const fbo=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.TEXTURE_2D,tex,0);
+    gl.drawBuffers([gl.NONE]);gl.readBuffer(gl.NONE);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    return this._shadow={tex,fbo,size:sz};
+  }
+  static _planes(m){const e=m.e,P=[];
+    for(const[s,k]of[[1,0],[-1,0],[1,1],[-1,1],[1,2],[-1,2]]){const a=e[3]+s*e[k],b=e[7]+s*e[4+k],c=e[11]+s*e[8+k],d=e[15]+s*e[12+k],l=Math.hypot(a,b,c)||1;P.push([a/l,b/l,c/l,d/l])}return P}
+  _inFrustum(o,pl){
+    if(!o.frustumCulled||o.isInstancedMesh||o.isPoints)return true;const g=o.geometry;
+    if(!g.boundingSphere)g.computeBoundingSphere();const bs=g.boundingSphere,e=o.matrixWorld.e,c=bs.center;
+    const x=e[0]*c.x+e[4]*c.y+e[8]*c.z+e[12],y=e[1]*c.x+e[5]*c.y+e[9]*c.z+e[13],z=e[2]*c.x+e[6]*c.y+e[10]*c.z+e[14];
+    const sc=Math.max(Math.hypot(e[0],e[1],e[2]),Math.hypot(e[4],e[5],e[6]),Math.hypot(e[8],e[9],e[10])),r=bs.radius*sc;
+    for(const p of pl)if(p[0]*x+p[1]*y+p[2]*z+p[3]<-r)return false;return true;
+  }
+  /* ---------- допоміжне ---------- */
+  _normalMat(e,out){
+    const ax=e[0],ay=e[1],az=e[2],bx=e[4],by=e[5],bz=e[6],cx=e[8],cy=e[9],cz=e[10];
+    const x0=by*cz-bz*cy,y0=bz*cx-bx*cz,z0=bx*cy-by*cx,det=ax*x0+ay*y0+az*z0,d=det!==0?1/det:1;
+    out[0]=x0*d;out[1]=y0*d;out[2]=z0*d;
+    out[3]=(cy*az-cz*ay)*d;out[4]=(cz*ax-cx*az)*d;out[5]=(cx*ay-cy*ax)*d;
+    out[6]=(ay*bz-az*by)*d;out[7]=(az*bx-ax*bz)*d;out[8]=(ax*by-ay*bx)*d;return out;
+  }
+  _collect(o,L){
+    if(!o.visible)return;
+    if(o.isLight){if(o.isHemisphereLight&&!L.hemi)L.hemi=o;if(o.isDirectionalLight&&!L.sun)L.sun=o}
+    else if((o.isMesh||o.isPoints)&&o.material&&o.material.visible!==false&&!(o.isInstancedMesh&&o.count<=0))L.items.push(o);
+    for(const c of o.children)this._collect(c,L);
+  }
+  /* ---------- відмальовування ---------- */
+  render(scene,camera){
+    const gl=this.gl;this._frame++;
+    scene.updateMatrixWorld();camera.updateMatrixWorld();
+    this._view.copy(camera.matrixWorld).invert();camera.matrixWorldInverse.copy(this._view);
+    this._vp.multiplyMatrices(camera.projectionMatrix,this._view);this._camProj=camera.projectionMatrix;
+    const L={items:[],hemi:null,sun:null};this._collect(scene,L);
+    const sun=L.sun,hemi=L.hemi,fog=scene.fog,cw=this.domElement.width,ch=this.domElement.height;
+    const campos=camera.matrixWorld.e;
+    /* тіні */
+    let shadowOn=false;
+    if(sun&&this.shadowMap.enabled&&sun.castShadow){
+      const sz=sun.shadow.mapSize.x|0||1024,st=this._shadowTarget(sz),sc=sun.shadow.camera,se=sun.matrixWorld.e;
+      const eye={x:se[12],y:se[13],z:se[14]},te=sun.target.matrixWorld.e,tg={x:te[12],y:te[13],z:te[14]};
+      const M=this._tmp.identity().lookAt(eye,tg,{x:0,y:1,z:0});M.e[12]=eye.x;M.e[13]=eye.y;M.e[14]=eye.z;M.invert();
+      const O=new Matrix4().makeOrthographic(sc.left,sc.right,sc.top,sc.bottom,sc.near,sc.far);this._lvp.multiplyMatrices(O,M);
+      const pl=WebGLRenderer._planes(this._lvp);
+      gl.bindFramebuffer(gl.FRAMEBUFFER,st.fbo);gl.viewport(0,0,sz,sz);gl.depthMask(true);gl.disable(gl.BLEND);gl.clear(gl.DEPTH_BUFFER_BIT);
+      let cur=null;
+      for(const o of L.items){
+        if(!o.castShadow||!o.isMesh||o.material.transparent||!this._inFrustum(o,pl))continue;
+        const inst=!!o.isInstancedMesh,pr=this._prog('D'+inst,VS_DEPTH,FS_DEPTH,inst?['INSTANCED']:[]);
+        if(cur!==pr){gl.useProgram(pr.p);cur=pr;gl.uniformMatrix4fv(this._loc(pr,'uLightVP'),false,this._lvp.e)}
+        gl.uniformMatrix4fv(this._loc(pr,'uModel'),false,o.matrixWorld.e);
+        this._draw(o,inst?this._instVao(o):this._vao(o.geometry).vao,inst);
+      }
+      shadowOn=true;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cw,ch);gl.depthMask(true);
+    const fc=fog?fog.color:{r:0,g:0,b:0};gl.clearColor(fc.r,fc.g,fc.b,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    /* сортування */
+    const vp=this._vp.e,dist=o=>{const e=o.matrixWorld.e;return vp[3]*e[12]+vp[7]*e[13]+vp[11]*e[14]+vp[15]};
+    const pl=WebGLRenderer._planes(this._vp),op=[],tr=[];
+    for(const o of L.items){if(!this._inFrustum(o,pl))continue;(o.material.transparent?tr:op).push(o)}
+    op.sort((a,b)=>a.renderOrder-b.renderOrder||a.material.id-b.material.id);
+    tr.sort((a,b)=>a.renderOrder-b.renderOrder||dist(b)-dist(a));
+    this._blend=-1;this._dw=null;this._dt=null;this._cur=null;this._cf=-1;
+    const ctx={L,fog,shadowOn,campos,sun,hemi};
+    for(const o of op)this._drawItem(o,ctx);
+    for(const o of tr)this._drawItem(o,ctx);
+    gl.bindVertexArray(null);
+  }
+  _draw(o,vao,inst){
+    const gl=this.gl,g=o.geometry;gl.bindVertexArray(vao);
+    if(o.isPoints){gl.drawArrays(gl.POINTS,0,g.attributes.position.count);return}
+    const r=g._gpu;
+    if(g.index){if(inst)gl.drawElementsInstanced(gl.TRIANGLES,g.index.array.length,r.itype,0,o.count);else gl.drawElements(gl.TRIANGLES,g.index.array.length,r.itype,0)}
+    else{const n=g.attributes.position.count;if(inst)gl.drawArraysInstanced(gl.TRIANGLES,0,n,o.count);else gl.drawArrays(gl.TRIANGLES,0,n)}
+  }
+  _drawItem(o,ctx){
+    const gl=this.gl,m=o.material,g=o.geometry,e=o.matrixWorld.e,{fog,sun,hemi}=ctx;
+    const fogOn=!!(fog&&m.fog!==false),vcol=!!(m.vertexColors&&g.attributes.color);
+    let pr,vao,inst=false;
+    const setBlend=()=>{
+      const b=m.transparent?(m.blending===2?2:1):(m.blending===2?2:0);
+      if(b!==this._blend){this._blend=b;if(b===0)gl.disable(gl.BLEND);else{gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,b===2?gl.ONE:gl.ONE_MINUS_SRC_ALPHA)}}
+      const dw=m.depthWrite!==false&&!(m.transparent&&m.depthWrite===false);if(dw!==this._dw){this._dw=dw;gl.depthMask(dw)}
+      const cf=m.side===1?1:0;if(cf!==this._cf){this._cf=cf;if(cf){gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT)}else gl.disable(gl.CULL_FACE)}
+      const dt=m.depthTest!==false;if(dt!==this._dt){this._dt=dt;dt?gl.enable(gl.DEPTH_TEST):gl.disable(gl.DEPTH_TEST)}
+    };
+    const fogU=()=>{const fc=fog?fog.color:{r:0,g:0,b:0};gl.uniform3f(this._loc(pr,'uFogColor'),fc.r,fc.g,fc.b);gl.uniform1f(this._loc(pr,'uFogNear'),fog?fog.near:0);gl.uniform1f(this._loc(pr,'uFogFar'),fog?fog.far:1);gl.uniform1f(this._loc(pr,'uFogOn'),fogOn?1:0)};
+    if(o.isPoints){
+      const defs=vcol?['VCOLOR']:[];pr=this._prog('P'+vcol,VS_PTS,FS_PTS,defs);
+      gl.useProgram(pr.p);const r=this._vao(g);vao=r.vao;setBlend();
+      gl.uniformMatrix4fv(this._loc(pr,'uVP'),false,this._vp.e);gl.uniformMatrix4fv(this._loc(pr,'uModel'),false,e);
+      gl.uniform1f(this._loc(pr,'uSize'),(m.size||1)*this._pr);gl.uniform1f(this._loc(pr,'uScale'),this.domElement.height*0.5);gl.uniform1f(this._loc(pr,'uAtten'),m.sizeAttenuation?1:0);
+      gl.uniform3f(this._loc(pr,'uColor'),m.color.r,m.color.g,m.color.b);gl.uniform1f(this._loc(pr,'uOpacity'),m.opacity);fogU();
+      this._draw(o,vao,false);return;
+    }
+    if(m.isShaderMaterial){
+      pr=this._userProg(m);gl.useProgram(pr.p);vao=this._vao(g).vao;setBlend();
+      const mv=this._tmp.multiplyMatrices(this._view,o.matrixWorld);
+      gl.uniformMatrix4fv(this._loc(pr,'modelViewMatrix'),false,mv.e);gl.uniformMatrix4fv(this._loc(pr,'projectionMatrix'),false,(this._pm=camPM(this,ctx)).e);
+      for(const k in m.uniforms){const v=m.uniforms[k].value,l=this._loc(pr,k);if(l===null)continue;
+        if(typeof v==='number')gl.uniform1f(l,v);else if(v&&v.r!==undefined)gl.uniform3f(l,v.r,v.g,v.b);else if(v&&v.x!==undefined)gl.uniform3f(l,v.x,v.y,v.z)}
+      this._draw(o,vao,false);return;
+    }
+    inst=!!o.isInstancedMesh;
+    const basic=!!m.isMeshBasicMaterial,flat=!!m.flatShading&&!basic,rs=!!(ctx.shadowOn&&o.receiveShadow&&!basic),map=!!(m.map&&m.map.image),ic=inst&&!!o.instanceColor;
+    const defs=[];if(inst)defs.push('INSTANCED');if(vcol)defs.push('VCOLOR');if(ic)defs.push('INST_COLOR');if(basic)defs.push('BASIC');if(flat)defs.push('FLAT');if(rs)defs.push('SHADOW');if(map)defs.push('MAP');
+    pr=this._prog('S'+defs.join(','),VS_STD,FS_STD,defs);
+    if(this._cur!==pr||pr.frame!==this._frame){gl.useProgram(pr.p);this._cur=pr;
+      if(pr.frame!==this._frame){pr.frame=this._frame;const L=this._loc.bind(this,pr);
+        gl.uniformMatrix4fv(L('uVP'),false,this._vp.e);gl.uniform3f(L('uCamPos'),ctx.campos[12],ctx.campos[13],ctx.campos[14]);
+        const hs=hemi?hemi.color:{r:1,g:1,b:1},hg=hemi?hemi.groundColor:{r:.3,g:.3,b:.3};
+        gl.uniform3f(L('uHemiSky'),hs.r,hs.g,hs.b);gl.uniform3f(L('uHemiGround'),hg.r,hg.g,hg.b);gl.uniform1f(L('uHemiI'),hemi?hemi.intensity:0);
+        if(sun){const se=sun.matrixWorld.e,te=sun.target.matrixWorld.e;let dx=se[12]-te[12],dy=se[13]-te[13],dz=se[14]-te[14];const l=Math.hypot(dx,dy,dz)||1;
+          gl.uniform3f(L('uSunDir'),dx/l,dy/l,dz/l);gl.uniform3f(L('uSunColor'),sun.color.r,sun.color.g,sun.color.b);gl.uniform1f(L('uSunI'),sun.intensity)}
+        else gl.uniform1f(L('uSunI'),0);
+        gl.uniform1f(L('uExposure'),this.toneMappingExposure);gl.uniform1f(L('uTone'),this.toneMapping===4?1:0);
+        if(rs&&ctx.shadowOn){gl.uniformMatrix4fv(L('uLightVP'),false,this._lvp.e);gl.uniform1f(L('uShadowOn'),1);const sz=this._shadow.size;gl.uniform2f(L('uTexel'),1/sz,1/sz);
+          gl.uniform1f(L('uShadowBias'),sun.shadow.bias||0);gl.uniform1f(L('uNormalBias'),sun.shadow.normalBias||0);
+          gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this._shadow.tex);gl.uniform1i(L('uShadowTex'),1);gl.activeTexture(gl.TEXTURE0)}
+        gl.uniform1i(L('uMap'),0);
+      }}
+    if(rs&&ctx.shadowOn&&!pr._sh){/* програма вперше бачить тіні в цьому кадрі — уніформи вже виставлені вище */}
+    setBlend();vao=inst?this._instVao(o):this._vao(g).vao;
+    const Lc=this._loc.bind(this,pr);
+    if(!g.attributes.normal)gl.vertexAttrib3f(1,0,1,0);if(!g.attributes.color)gl.vertexAttrib3f(2,1,1,1);if(!g.attributes.uv)gl.vertexAttrib2f(3,0,0);
+    gl.uniformMatrix4fv(Lc('uModel'),false,e);gl.uniformMatrix3fv(Lc('uNormalMat'),false,this._normalMat(e,this._nm||(this._nm=new Float32Array(9))));
+    gl.uniform3f(Lc('uColor'),m.color.r,m.color.g,m.color.b);gl.uniform1f(Lc('uOpacity'),m.opacity);
+    if(!basic){const em=m.emissive||{r:0,g:0,b:0};gl.uniform3f(Lc('uEmissive'),em.r,em.g,em.b);gl.uniform1f(Lc('uEmI'),m.emissiveIntensity??1);
+      gl.uniform1f(Lc('uRough'),m.roughness??1);gl.uniform1f(Lc('uMetal'),m.metalness??0);gl.uniform1f(Lc('uEnv'),m.envMap?(m.envMapIntensity??1):0)}
+    if(map){this._tex(m.map)}
+    fogU();
+    this._draw(o,vao,inst);
+  }
+}
+function camPM(r,ctx){return r._camProj}
+Object.assign(T,{WebGLRenderer});
+window.THREE=T;
+
+</script>
 </head>
 <body>
 <div id="app">
@@ -139,7 +821,6 @@ input[type=range]{width:100%}
 </div>
 
 <script type="module">
-import * as THREE from 'three';
 
 /* ================= utils ================= */
 const $=id=>document.getElementById(id);
@@ -279,18 +960,19 @@ async function startCamera(){
     setStatus('Камера працює. Завантаження моделі розпізнавання…','y');
     const mp=await loadMP();
     const fs=await mp.FilesetResolver.forVisionTasks(mp.base+'/wasm');
-    const make=d=>mp.PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MODEL_URL,delegate:d},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
+    let modelUrl=MODEL_URL;if(mp.base==='./mediapipe'){try{const r=await fetch('./mediapipe/pose_landmarker_lite.task',{method:'HEAD'});if(r.ok)modelUrl='./mediapipe/pose_landmarker_lite.task'}catch(e){}}
+    const make=d=>mp.PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:modelUrl,delegate:d},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
     try{tr.pl=await make('GPU')}catch(e){console.warn('GPU delegate failed',e);tr.pl=await make('CPU')}
     tr.on=true;tr.calibrated=false;$('camBtn').textContent='Вимкнути камеру';$('camBtn').disabled=false;$('calBtn').disabled=false;
     setStatus('Тіло не знайдено — стань у кадр','r');
   }catch(e){
-    console.error(e);setStatus('Камера є, але модель не завантажилась ('+((e&&e.message)||e)+'). Перевірте інтернет і натисніть «Повторити».','r');
+    console.error(e);setStatus('Камера є, але модель не завантажилась ('+((e&&e.message)||e)+'). Потрібен інтернет або локальна папка mediapipe (див. download_mediapipe.py). Клавіатура працює без камери.','r');
     $('camBtn').textContent='Повторити';$('camBtn').disabled=false;
   }
   tr.starting=false;
 }
 async function loadMP(){
-  const bases=['https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14','https://unpkg.com/@mediapipe/tasks-vision@0.10.14'];
+  const bases=['./mediapipe','https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14','https://unpkg.com/@mediapipe/tasks-vision@0.10.14'];
   let err;for(const b of bases){try{const m=await import(b+'/vision_bundle.mjs');return{FilesetResolver:m.FilesetResolver,PoseLandmarker:m.PoseLandmarker,base:b}}catch(e){err=e;console.warn('MediaPipe CDN failed',b,e)}}
   throw err;
 }
@@ -746,7 +1428,7 @@ function decoRail(g,i,r){
     g.add(st);
   }
   if(i%7===4){ /* міст */
-    const b=new THREE.Group();b.position.z=-CH/2;const hs=span/2+5;
+    const b=new THREE.Group();b.position.z=-CH/2;const hs=span/2+5;b.userData.inst=g.userData.inst;
     b.add(box(M.stone,0,9.4,0,hs*2+6,0.9,6,true));for(const sd of[-1,1]){b.add(box(M.stone,sd*(hs+1.5),4.7,0,3,9.4,6,true));b.add(box(pm(0xd0c8b8),sd*(hs+1.5),9.9,0,3,0.4,6.4));
       for(let k=-2;k<=2;k++)b.add(mesh(G.cyl,M.white,sd*(hs-4)+k*0,10.4,k*1.2,0.07,1.0,0.07))}
     b.add(box(M.red,0,10.45,-2.9,hs*2+6,0.15,0.15),box(M.red,0,10.45,2.9,hs*2+6,0.15,0.15));
@@ -877,7 +1559,7 @@ function totem(g,x,z,r){
   t.add(mesh(G.cone,pm(0xe8453c),0,8.1,0,0.9,1.6,0.9));g.add(t);
 }
 function ropeBridge(g,r){
-  const L=span+16,b=new THREE.Group();b.position.set(0,10,-CH/2);
+  const L=span+16,b=new THREE.Group();b.position.set(0,10,-CH/2);b.userData.inst=g.userData.inst;
   inst(b,G.box,M.wood,Math.floor(L/0.9),(k,d)=>{d.position.set(-L/2+k*0.9+0.45,0,0);d.scale.set(0.8,0.12,3.4);return k%2?0xc58a4a:0xa86f35});
   for(const z of[-1.7,1.7]){b.add(box(pm(0x6b4a2a),0,0.9,z,L,0.1,0.1),box(pm(0x6b4a2a),0,0.1,z,L,0.1,0.1))}
   for(const sd of[-1,1]){b.add(mesh(G.cyl,M.trunk,sd*(L/2),-4,0,0.5,14,0.5,true),mesh(G.ico,M.leaf,sd*(L/2),4,0,1.6,1.2,1.6))}
@@ -1087,7 +1769,7 @@ function bunting(g,z,r){
   g.add(box(pm(0xffffff),0,10.4-0.8,z,L,0.04,0.04).translateY(0));
 }
 function cityBridge(g,r){
-  const b=new THREE.Group();b.position.z=-CH/2;const hs=span/2+5;
+  const b=new THREE.Group();b.position.z=-CH/2;const hs=span/2+5;b.userData.inst=g.userData.inst;
   b.add(box(pm(0xf4d9b0),0,9.4,0,hs*2+6,0.9,6,true));
   for(const sd of[-1,1]){b.add(box(pm(0xf4d9b0),sd*(hs+1.5),4.7,0,3,9.4,6,true),box(pm(0xff5fa2),sd*(hs+1.5),9.9,0,3.2,0.5,6.4));for(const z of[-2.8,2.8])b.add(mesh(G.sph,glow(0xffe8a0,1),sd*(hs+1.5),11.2,z,0.35,0.35,0.35),mesh(G.cyl,pm(0x2a3a4a),sd*(hs+1.5),10.4,z,0.08,1.2,0.08))}
   inst(b,G.box,mat(0xffffff),12,(k,d)=>{d.position.set(-hs+k*(hs*2/11),10.1,-2.9);d.scale.set(0.25,1,0.25);return[0xff5fa2,0xffc21a,0x4aa8ff][k%3]});
