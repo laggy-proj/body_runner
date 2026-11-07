@@ -56,6 +56,15 @@ input[type=range]{width:100%}
 .swatch{width:34px;height:34px;border-radius:50%;border:3px solid #fff;padding:0;box-shadow:none}
 .swatch.lock{filter:grayscale(1) brightness(.5)}
 #hud{position:absolute;inset:0;pointer-events:none;z-index:3}
+#joyzone{position:absolute;inset:0;z-index:2;display:none;touch-action:none;-webkit-user-select:none;user-select:none}
+body.ctl-joy #joyzone{display:block}
+#joy{position:absolute;width:150px;height:150px;margin:-75px 0 0 -75px;z-index:4;pointer-events:none;display:none}
+#joy svg{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))}
+#jknob{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffe88a,#ffb52e 60%,#d98a10);border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.45)}
+#jtag{position:absolute;left:0;right:0;bottom:-26px;text-align:center;font-weight:900;letter-spacing:2px;font-size:15px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.5)}
+#jpunch{position:absolute;right:26px;bottom:26px;width:92px;height:92px;border-radius:50%;z-index:4;display:none;border:4px solid #fff;background:radial-gradient(circle at 35% 30%,#ff9a8a,#e5452f);color:#fff;font-weight:900;font-size:17px;letter-spacing:1px;box-shadow:0 6px 14px rgba(0,0,0,.4);touch-action:none}
+#jpunch.on{transform:scale(1.12);filter:brightness(1.25)}
+#jhint{position:absolute;left:50%;top:104px;transform:translateX(-50%);z-index:4;display:none;font-weight:800;font-size:15px;padding:6px 14px;border-radius:20px;background:rgba(0,0,0,.4);color:#fff;pointer-events:none;white-space:nowrap}
 #stars{position:absolute;left:16px;top:14px;font-size:30px;font-weight:900;background:rgba(0,0,0,.35);border-radius:30px;padding:4px 18px 4px 12px;display:flex;align-items:center;gap:8px}
 #coins{position:absolute;left:16px;top:66px;font-size:24px;font-weight:900;background:rgba(0,0,0,.35);border-radius:30px;padding:3px 16px 3px 10px;display:flex;align-items:center;gap:8px}
 #lvl{position:absolute;left:50%;top:14px;transform:translateX(-50%);text-align:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.4)}
@@ -668,7 +677,7 @@ class WebGLRenderer{
       for(const o of L.items){
         if(!o.castShadow||!o.isMesh||o.material.transparent||!this._inFrustum(o,pl))continue;
         const inst=!!o.isInstancedMesh,pr=this._prog('D'+inst,VS_DEPTH,FS_DEPTH,inst?['INSTANCED']:[]);
-        if(cur!==pr){gl.useProgram(pr.p);cur=pr;gl.uniformMatrix4fv(this._loc(pr,'uLightVP'),false,this._lvp.e)}
+        if(cur!==pr){gl.useProgram(pr.p);cur=pr;this._cur=null;gl.uniformMatrix4fv(this._loc(pr,'uLightVP'),false,this._lvp.e)}
         gl.uniformMatrix4fv(this._loc(pr,'uModel'),false,o.matrixWorld.e);
         this._draw(o,inst?this._instVao(o):this._vao(o.geometry).vao,inst);
       }
@@ -709,14 +718,14 @@ class WebGLRenderer{
     const fogU=()=>{const fc=fog?fog.color:{r:0,g:0,b:0};gl.uniform3f(this._loc(pr,'uFogColor'),fc.r,fc.g,fc.b);gl.uniform1f(this._loc(pr,'uFogNear'),fog?fog.near:0);gl.uniform1f(this._loc(pr,'uFogFar'),fog?fog.far:1);gl.uniform1f(this._loc(pr,'uFogOn'),fogOn?1:0)};
     if(o.isPoints){
       const defs=vcol?['VCOLOR']:[];pr=this._prog('P'+vcol,VS_PTS,FS_PTS,defs);
-      gl.useProgram(pr.p);const r=this._vao(g);vao=r.vao;setBlend();
+      gl.useProgram(pr.p);this._cur=null;const r=this._vao(g);vao=r.vao;setBlend();
       gl.uniformMatrix4fv(this._loc(pr,'uVP'),false,this._vp.e);gl.uniformMatrix4fv(this._loc(pr,'uModel'),false,e);
       gl.uniform1f(this._loc(pr,'uSize'),(m.size||1)*this._pr);gl.uniform1f(this._loc(pr,'uScale'),this.domElement.height*0.5);gl.uniform1f(this._loc(pr,'uAtten'),m.sizeAttenuation?1:0);
       gl.uniform3f(this._loc(pr,'uColor'),m.color.r,m.color.g,m.color.b);gl.uniform1f(this._loc(pr,'uOpacity'),m.opacity);fogU();
       this._draw(o,vao,false);return;
     }
     if(m.isShaderMaterial){
-      pr=this._userProg(m);gl.useProgram(pr.p);vao=this._vao(g).vao;setBlend();
+      pr=this._userProg(m);gl.useProgram(pr.p);this._cur=null;vao=this._vao(g).vao;setBlend();
       const mv=this._tmp.multiplyMatrices(this._view,o.matrixWorld);
       gl.uniformMatrix4fv(this._loc(pr,'modelViewMatrix'),false,mv.e);gl.uniformMatrix4fv(this._loc(pr,'projectionMatrix'),false,(this._pm=camPM(this,ctx)).e);
       for(const k in m.uniforms){const v=m.uniforms[k].value,l=this._loc(pr,k);if(l===null)continue;
@@ -764,6 +773,10 @@ window.THREE=T;
 <div id="app">
  <div id="stage">
   <canvas id="gl"></canvas>
+  <div id="joyzone"></div>
+  <div id="joy"><svg viewBox="0 0 150 150"><circle cx="75" cy="75" r="68" fill="rgba(10,20,40,.35)" stroke="#fff" stroke-width="4" stroke-opacity=".85"/><circle cx="75" cy="75" r="30" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"><path d="M65 26l10-10 10 10"/><path d="M65 124l10 10 10-10"/><path d="M26 65l-10 10 10 10"/><path d="M124 65l10 10-10 10"/></g></svg><div id="jknob"></div><div id="jtag"></div></div>
+  <button id="jpunch">УДАР</button>
+  <div id="jhint"></div>
   <div id="hud">
    <div id="stars"><svg width="30" height="30" viewBox="0 0 24 24"><path fill="#ffd23f" stroke="#b57b00" stroke-width="1.2" d="M12 2l3 6.6 7.2.8-5.4 4.8 1.6 7.1L12 17.6 5.6 21.3l1.6-7.1L1.8 9.4 9 8.6z"/></svg><span id="starn">0</span></div>
    <div id="coins"><svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#ffc21a" stroke="#b57b00" stroke-width="2"/><circle cx="12" cy="12" r="6" fill="none" stroke="#ffe27a" stroke-width="2"/></svg><span id="coinn">0</span></div>
@@ -783,6 +796,9 @@ window.THREE=T;
     <p style="margin-top:12px"><b>Поза гравця</b></p>
     <div class="row" style="justify-content:center"><button id="p1" class="alt sel">Стоячи</button><button id="p2" class="alt">Сидячи</button></div>
     <p id="posenote" class="note"></p>
+    <p style="margin-top:12px"><b>Керування</b></p>
+    <div class="row" style="justify-content:center"><button id="c1" class="alt sel">Тіло (камера)</button><button id="c2" class="alt">Джойстик</button><button id="c3" class="alt">Бот</button></div>
+    <p id="ctlnote" class="note"></p>
     <p style="margin-top:12px"><b>Режим</b></p>
     <div class="row" style="justify-content:center"><button id="m1" class="alt sel">Без програшу</button><button id="m2" class="alt">Вільний біг</button></div>
     <p style="margin-top:12px"><b>Персонаж</b></p>
@@ -830,8 +846,8 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const now=()=>performance.now()/1000;
 const ema=(p,v,a)=>p==null?v:p+(v-p)*a;
 function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-const S={panel:'full',view:'video',map:+(localStorage.getItem('br_map')||0),mirror:true,seated:false,lanes:3,mode:'nolose',sens:1,smooth:0.45,volume:0.7,music:true};
-const input={kbdUp:false,kbdL:false,kbdR:false,laneIdx:1,camCrouch:false,kbdCrouch:false,get crouch(){return this.camCrouch||this.kbdCrouch},jumpTs:-9,punchQ:[],flash:'',flashT:0,side:0};
+const S={panel:'full',view:'video',map:+(localStorage.getItem('br_map')||0),mirror:true,seated:false,lanes:3,ctrl:'body',mode:'nolose',sens:1,smooth:0.45,volume:0.7,music:true};
+const input={kbdUp:false,kbdL:false,kbdR:false,laneIdx:1,camCrouch:false,kbdCrouch:false,joyUp:false,joyL:false,joyR:false,joyCrouch:false,get crouch(){return this.camCrouch||this.kbdCrouch||this.joyCrouch},jumpTs:-9,punchQ:[],flash:'',flashT:0,side:0};
 let state='menu',prevState='menu',afterCalib=null;
 let totalCoins=+(localStorage.getItem('br_coins')||0),totalStars=+(localStorage.getItem('br_stars')||0),suit=+(localStorage.getItem('br_suit')||0);
 const SUITS=[{c:0x2f8cff,need:0,n:'синій'},{c:0xe8453c,need:25,n:'червоний'},{c:0x2fc36b,need:60,n:'зелений'},{c:0xffc21a,need:120,n:'золотий'}];
@@ -925,8 +941,8 @@ function updateArms(lm,t,a){
 /* що саме "тягне" гравець зараз: руки вгору / ліва вбік / права вбік (камера або клавіші R, Q, E) */
 function reach(t){
   const r={up:false,handUp:false,L:false,R:false};
-  if(input.kbdUp)r.handUp=true;if(input.kbdL)r.L=true;if(input.kbdR)r.R=true;
-  if(tr.on){
+  if(input.kbdUp||input.joyUp)r.handUp=true;if(input.kbdL||input.joyL)r.L=true;if(input.kbdR||input.joyR)r.R=true;
+  if(tr.on&&S.ctrl==='body'){
     if(tr.hu&&t-tr.hu.t<0.35&&(tr.hu.L||tr.hu.R))r.handUp=true;
     const L=ARM.L,R=ARM.R;
     if(L&&t-L.t<0.35&&((L.x>0.5&&Math.abs(L.y)<0.8)||(L.sx>0.95&&Math.abs(L.sy)<L.sx*1.1)))r.L=true;
@@ -1141,6 +1157,7 @@ function detectSeated(lm,t,dt,a){
   }
 }
 function detect(lm,t,dt,a){
+  if(S.ctrl!=='body')return;
   if(tr.base.seated){detectSeated(lm,t,dt,a);return}
   const b=tr.base,k=1/S.sens;
   const hipY=(lm[23].y+lm[24].y)/2,shY=(lm[11].y+lm[12].y)/2;
@@ -1896,6 +1913,7 @@ function gemMesh(kind){
   m.add(ar);m.userData.core=core;m.userData.arrow=ar;return m;
 }
 function mkGems(kind,gz){
+  if(gz<14)return;
   const last=laneX.length-1,l=kind==='gemR'?last:kind==='gemL'?0:Math.floor(rand()*laneX.length);
   for(let i=0;i<3;i++){
     const m=gemMesh(kind),z=gz+i*1.8,x=kind==='gemU'?laneX[l]:laneX[l]+(kind==='gemL'?-1.6:1.6),y=kind==='gemU'?3.3:1.5;
@@ -1991,8 +2009,10 @@ function addTrain(s){
   return s+n*10;
 }
 function addPattern(){
-  const asst=P.assist,pad=24+asst*7;
-  if(S.mode==='free'){const l=Math.floor(rand()*laneX.length);mkStars(genS,{l,y:1.2},8,rand()<.5?1.4:0);mkCoins(genS+10,(l+1)%laneX.length,6);if(rand()<.35)mkGift(genS+16,(l+2)%laneX.length);if(rand()<.4)mkGems('gemU',genS+2);if(rand()<.3)mkGems(rand()<.5?'gemL':'gemR',genS+8);genS+=26;return}
+  const asst=P.assist,pad=36+asst*7;
+  if(S.mode==='free'){const N=laneX.length,l=Math.floor(rand()*N),l2=l===0?1:l===N-1?l-1:(rand()<.5?l-1:l+1),l3=l2===0?1:l2-1;
+    mkStars(genS+8,{l,y:1.2},8,rand()<.5?1.4:0);mkCoins(genS+24,l2,6);if(rand()<.5)mkGift(genS+36,l3);   // нічого не накладається: усе можна зібрати по черзі
+    if(rand()<.5)mkGems('gemU',genS+46);if(rand()<.4)mkGems(rand()<.5?'gemL':'gemR',genS+58);genS+=74;return}
   const order=['jump','low','lane','punch','train'];let t=patN<order.length?order[patN]:['jump','low','lane','punch','train','jump','punch','train'][Math.floor(rand()*8)];
   patN++;const s=genS+(t==='train'?16:0);let end=s;
   if(t==='jump'){addBarrier(s);end=s+2;mkStars(s-12,{l:Math.floor(rand()*laneX.length),y:1.2},5,0)}
@@ -2001,10 +2021,8 @@ function addPattern(){
   else if(t==='lane'){const b=new Set(),f=Math.floor(rand()*laneX.length);laneX.forEach((_,l)=>{if(l!==f&&(laneX.length===2||rand()<.8))b.add(l)});if(!b.size)b.add((f+1)%laneX.length);addLaneBlock(s,b,6);end=s+6;mkStars(s,{l:f,y:1.2},4,0)}
   else{end=addTrain(s)}
   const zS=t==='train'?s-15:s,nc=4+Math.floor(rand()*4);   // усе для збору — ПЕРЕД перешкодою, ніколи в ній
-  if(rand()<0.6)mkCoins(zS-14-nc*1.4,Math.floor(rand()*laneX.length),nc);
-  if(rand()<0.22)mkGift(zS-26,Math.floor(rand()*laneX.length));
-  if(rand()<0.3)mkGems('gemU',genS-22);
-  if(rand()<0.22)mkGems(rand()<.5?'gemL':'gemR',genS-34);
+  {const r0=rand(),rl=Math.floor(rand()*laneX.length);   // одна група на візерунок — все досяжне по черзі
+   if(r0<0.55)mkCoins(zS-30,rl,nc);else if(r0<0.67)mkGift(zS-24,rl);else if(r0<0.85)mkGems('gemU',zS-30);else mkGems(rand()<.5?'gemL':'gemR',zS-30)}
   genS=end+pad+8;
 }
 function genAhead(){while(genS<P.s+170)addPattern()}
@@ -2102,7 +2120,7 @@ function updateGame(dt,run){
   if(!(P.waiting&&P.waitFor&&P.waitFor.type==='punch'))while(input.punchQ.length&&t-input.punchQ[0]>0.5)input.punchQ.shift();
   /* зірочки */
   for(const s of stars){
-    if(s.got){s.t+=dt;s.m.scale.setScalar(1+s.t*3);s.m.position.y+=dt*3;continue}
+    if(s.got){s.t+=dt;if(s.kind&&s.kind.startsWith('gem')){s.m.visible=false;continue}s.m.scale.setScalar(1+s.t*1.6);s.m.position.y+=dt*2;continue}
     const gem=s.kind&&s.kind.startsWith('gem');
     if(gem){s.m.userData.core.rotation.y+=dt*3;s.m.userData.core.position.y=Math.sin(t*3+s.s)*0.12;s.m.userData.arrow.scale.setScalar(1+Math.sin(t*6)*0.2)}else s.m.rotation.y+=dt*3;
     let hit;
@@ -2110,7 +2128,7 @@ function updateGame(dt,run){
     else if(gem)hit=Math.abs(P.s-s.s)<1.9&&Math.abs(P.x-laneX[s.l])<1.8&&(s.kind==='gemL'?rc.L:rc.R);
     else hit=Math.abs(P.s-s.s)<0.9&&Math.abs(P.x-laneX[s.l])<1.1&&Math.abs(P.y+1.0-s.y)<1.4;
     if(hit){
-      s.got=true;const kind=s.kind||'star',pos=s.m.position;
+      s.got=true;const kind=s.kind||'star',pos=s.m.position;if(kind.startsWith('gem'))s.m.visible=false;
       if(kind==='coin'){totalCoins++;P.coins++;sfx.coin();burst(pos.x,pos.y,pos.z,0xffc21a,5,3.5,.1,.5,4);localStorage.setItem('br_coins',totalCoins);$('coinn').textContent=P.coins}
       else{
         const add=kind==='gift'?5:kind.startsWith('gem')?3:1,prev=totalStars;P.stars+=add;totalStars+=add;
@@ -2222,6 +2240,7 @@ function setState(s){
   state=s;
   for(const id of['menu','calib','lost','pause'])$(id).classList.toggle('show',id===s);
   $('tut').classList.toggle('show',s==='tutorial');$('pausebtn').style.display=(s==='playing'||s==='tutorial')?'block':'none';
+  setTimeout(ctlUI,0);
   if(s!=='playing'){$('hint').classList.remove('on')}
 }
 function resetWorld(){
@@ -2237,11 +2256,11 @@ function beginPlay(){
 }
 function startGame(){
   audioInit();
-  if(tr.on&&!tr.calibrated)startCalibration(beginPlay);else beginPlay();
+  if(S.ctrl==='body'&&tr.on&&!tr.calibrated)startCalibration(beginPlay);else beginPlay();
 }
 function startTutorial(){
   audioInit();resetWorld();tut={step:0,c:0};setState('tutorial');tutUI();
-  if(tr.on&&!tr.calibrated)startCalibration(()=>setState('tutorial'));
+  if(S.ctrl==='body'&&tr.on&&!tr.calibrated)startCalibration(()=>setState('tutorial'));
 }
 function tutUI(){
   if(!tut)return;
@@ -2299,13 +2318,13 @@ function renderMaps(){
   $('maps').innerHTML='';
   MAPS.forEach((m,i)=>$('maps').appendChild(pickBtn(THUMB.maps[i],m.n,i===S.map,()=>{S.map=i;localStorage.setItem('br_map',i);resetWorld();renderMaps();sfx.ok()})));
 }
-function savePrefs(){try{localStorage.setItem('br_prefs',JSON.stringify({lanes:S.lanes,mode:S.mode,seated:S.seated,sens:S.sens,smooth:S.smooth,vol:S.volume,music:S.music,mirror:S.mirror,view:S.view}))}catch(e){}}
+function savePrefs(){try{localStorage.setItem('br_prefs',JSON.stringify({lanes:S.lanes,ctrl:S.ctrl,mode:S.mode,seated:S.seated,sens:S.sens,smooth:S.smooth,vol:S.volume,music:S.music,mirror:S.mirror,view:S.view}))}catch(e){}}
 function loadPrefs(){
   try{
     const p=JSON.parse(localStorage.getItem('br_prefs')||'null');if(!p)return;
     S.lanes=p.lanes===2?2:3;$('l2').classList.toggle('sel',S.lanes===2);$('l3').classList.toggle('sel',S.lanes===3);
     S.mode=p.mode==='free'?'free':'nolose';$('m1').classList.toggle('sel',S.mode==='nolose');$('m2').classList.toggle('sel',S.mode==='free');
-    setPose(!!p.seated);
+    setPose(!!p.seated);setCtrl(['joy','bot'].includes(p.ctrl)?p.ctrl:'body');
     for(const[k,id,key]of[['sens','sens','sens'],['smooth','smooth','smooth'],['vol','vol','volume']])if(typeof p[k]==='number'){S[key]=p[k];$(id).value=p[k]}
     S.view=['video','skin','off'].includes(p.view)?p.view:'video';applyView();S.music=p.music!==false;$('music').checked=S.music;S.mirror=p.mirror!==false;$('mirror').checked=S.mirror;
   }catch(e){}
@@ -2354,6 +2373,124 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>{if(e.code==='ArrowDown'||e.code==='KeyS')input.kbdCrouch=false;if(e.code==='KeyR')input.kbdUp=false;if(e.code==='KeyQ')input.kbdL=false;if(e.code==='KeyE')input.kbdR=false});
 
+
+/* ================= джойстик у точці дотику + бот ================= */
+const J={x:0,y:0,R:55,pid:null,ox:0,oy:0,t0:0,mv:0,ru:true,rl:true,rr:true};
+const joyEl=$('joy'),jknob=$('jknob'),jz=$('joyzone');
+function playingNow(){return state==='playing'||state==='tutorial'}
+function joyDrive(nx,ny){
+  J.x=nx;J.y=ny;jknob.style.transform=`translate(${nx*J.R}px,${ny*J.R}px)`;
+  if(!playingNow()){input.joyUp=input.joyL=input.joyR=input.joyCrouch=false;return}
+  if(nx>0.5&&J.rr){J.rr=false;setLane(input.laneIdx+1)}if(nx<0.25)J.rr=true;
+  if(nx<-0.5&&J.rl){J.rl=false;setLane(input.laneIdx-1)}if(nx>-0.25)J.rl=true;
+  if(ny<-0.5&&J.ru){J.ru=false;emit('jump')}if(ny>-0.25)J.ru=true;
+  const dn=ny>0.5;if(dn&&!input.joyCrouch)emit('crouch');input.joyCrouch=dn;
+  input.joyUp=ny<-0.85;input.joyL=nx<-0.85;input.joyR=nx>0.85;
+}
+function joyPlace(x,y){joyEl.style.left=x+'px';joyEl.style.top=y+'px';joyEl.style.bottom='auto'}
+function doPunch(){if(playingNow())emit('punch')}
+jz.addEventListener('pointerdown',e=>{
+  if(S.ctrl!=='joy'||J.pid!==null||!playingNow())return;
+  audioInit();J.pid=e.pointerId;try{jz.setPointerCapture(e.pointerId)}catch(_){}
+  const r=$('stage').getBoundingClientRect();J.ox=e.clientX;J.oy=e.clientY;J.t0=e.timeStamp;J.mv=0;J.ru=J.rl=J.rr=true;
+  joyPlace(e.clientX-r.left,e.clientY-r.top);joyEl.style.display='block';joyDrive(0,0);e.preventDefault();
+});
+jz.addEventListener('pointermove',e=>{
+  if(e.pointerId!==J.pid)return;
+  let dx=(e.clientX-J.ox)/J.R,dy=(e.clientY-J.oy)/J.R;const l=Math.hypot(dx,dy);J.mv=Math.max(J.mv,l);if(l>1){dx/=l;dy/=l}
+  joyDrive(dx,dy);e.preventDefault();
+});
+function joyEnd(e){
+  if(e.pointerId!==J.pid)return;J.pid=null;
+  const quick=e.timeStamp-J.t0<260&&J.mv<0.2;joyDrive(0,0);if(S.ctrl==='joy')joyEl.style.display='none';
+  if(quick&&e.type==='pointerup')doPunch();
+}
+jz.addEventListener('pointerup',joyEnd);jz.addEventListener('pointercancel',joyEnd);
+$('jpunch').addEventListener('pointerdown',e=>{if(S.ctrl==='joy'){audioInit();doPunch();$('jpunch').classList.add('on');e.preventDefault()}});
+for(const ev of['pointerup','pointerleave','pointercancel'])$('jpunch').addEventListener(ev,()=>{if(S.ctrl==='joy')$('jpunch').classList.remove('on')});
+function ctlUI(){
+  const p=playingNow();
+  document.body.classList.toggle('ctl-joy',S.ctrl==='joy');
+  $('jpunch').style.display=(S.ctrl!=='body'&&p)?'block':'none';$('jpunch').style.pointerEvents=S.ctrl==='joy'?'auto':'none';
+  const bot=S.ctrl==='bot'&&p;
+  if(bot){joyEl.style.display='block';joyEl.style.left='130px';joyEl.style.top=($('stage').clientHeight-150)+'px';$('jtag').textContent='БОТ'}
+  else if(S.ctrl!=='joy'||!p){joyEl.style.display='none';$('jtag').textContent=''}
+  const hm=$('jhint');hm.style.display=(S.ctrl==='joy'&&p&&!tut)?'block':'none';hm.textContent='Торкнись і тягни: ←→ смуга · ↑ стрибок · ↓ присісти · торкання або УДАР — удар · потягни далі — руки';
+  if(!p){joyDrive(0,0);BOT.kx=BOT.ky=0}
+}
+const CTLN={body:'Керуй тілом через камеру (або клавіатурою для тесту).',joy:'Торкнись будь-де екрана — з’явиться джойстик. Вліво/вправо — смуга, вгору — стрибок, вниз — присісти, швидке торкання — удар. Тягни до краю — рука вбік/вгору для кристалів.',bot:'Бот сам проходить рівень і збирає все. Джойстик ліворуч унизу показує, як він керується.'};
+function setCtrl(c){
+  S.ctrl=c;for(const[k,id]of[['body','c1'],['joy','c2'],['bot','c3']])$(id).classList.toggle('sel',c===k);
+  $('ctlnote').textContent=CTLN[c];ctlUI();
+}
+$('c1').onclick=()=>{setCtrl('body');savePrefs()};$('c2').onclick=()=>{setCtrl('joy');savePrefs()};$('c3').onclick=()=>{setCtrl('bot');savePrefs()};
+const BOT={kx:0,ky:0,fl:null,jt:-9,pt:-9,tgt:1,hold:0};
+function botPlan(){
+  const n=S.lanes,GAP=3.6;
+  if(P.onTrain)return P.trainLane;
+  const it=[];
+  for(const e of events){
+    if(e.done||e.s<P.s-2||e.s>P.s+70)continue;
+    if(e.type==='board'){const x=events.find(q=>q.type==='exit'&&q.s>e.s);it.push({s:e.s-e.stop-2,forced:[e.lane]});if(x)it.push({s:x.s,forced:[e.lane]});e._x=x}
+    if(e.type==='lane'){const free=[];for(let l=0;l<n;l++)if(!e.blocked.has(l))free.push(l);it.push({s:e.s-4,forced:free});it.push({s:e.s+e.len,forced:free})}
+  }
+  const tr0=events.filter(e=>e.type==='board'&&!e.done&&e._x);
+  for(const s of stars){
+    if(s.got||s.s<P.s-0.4||s.s>P.s+70)continue;
+    let ok=true;for(const e of tr0)if(s.s>e.s-e.stop-2&&s.s<e._x.s&&s.l!==e.lane)ok=false;
+    if(!ok)continue;
+    it.push({s:s.s,l:s.l,w:s.kind==='gift'?5:s.kind&&s.kind.startsWith('gem')?3:1});
+  }
+  if(!it.length)return input.laneIdx;
+  it.sort((a,b)=>a.s-b.s);
+  const NEG=-1e9;let dp=Array(n).fill(NEG),first=Array(n).fill(0),ps=P.s,started=false;dp[input.laneIdx]=0;
+  it.forEach((q,i)=>{
+    const nd=Array(n).fill(NEG),nf=Array(n).fill(0),ds=Math.max(0.01,q.s-ps);
+    for(let l=0;l<n;l++){
+      if(q.forced&&!q.forced.includes(l))continue;
+      let best=NEG,bf=l;
+      for(let p=0;p<n;p++){if(dp[p]<=NEG/2||Math.abs(l-p)*GAP>ds)continue;const v=dp[p]-Math.abs(l-p)*0.001;if(v>best){best=v;bf=started?first[p]:l}}
+      if(best>NEG/2){nd[l]=best+(q.forced?0:(q.l===l?q.w:0));nf[l]=bf}
+    }
+    if(nd.every(v=>v<=NEG/2)){/* недосяжно — пропускаємо цей пункт */return}
+    dp=nd;first=nf;ps=q.s;started=true;
+  });
+  let bl=input.laneIdx,bv=NEG;for(let l=0;l<n;l++)if(dp[l]>bv){bv=dp[l];bl=first[l]}
+  return bl;
+}
+function botThink(dt,t){
+  let tx=0,ty=0,punch=false;
+  const ev=events.find(e=>!e.done);
+  /* перешкоди */
+  if(ev&&ev.type!=='exit'){
+    const rem=ev.s-ev.stop-P.s;
+    if(ev.type==='jump'||ev.type==='gap'||(ev.type==='board'&&P.laneIdx===ev.lane)){if(rem<1.4&&t-BOT.jt>0.6){BOT.jt=t;BOT.up=t+0.14}}
+    else if(ev.type==='low'){if(rem<2.8)ty=0.95}
+    else if(ev.type==='punch'){if(rem<0.8&&t-BOT.pt>0.2){BOT.pt=t;punch=true}}
+  }
+  /* зірки на дузі — стрибок так, щоб вершина польоту припала на найвищу зірку */
+  if(!P.hop&&!P.leap&&P.y<=P.levelY+0.05&&t-BOT.jt>0.7){
+    let top=null;for(const s of stars){if(s.got||s.kind)continue;const d=s.s-P.s;if(d<0.2||d>8||Math.abs(P.x-laneX[s.l])>1.2)continue;if(!top||s.y>top.y)top=s}
+    if(top&&top.y-P.levelY>=2.0){const d=top.s-P.s;if(d<3.4&&d>1.6){BOT.jt=t;BOT.up=t+0.14}}
+  }
+  if(BOT.up&&t<BOT.up)ty=-0.85;
+  /* кристали: тримаємо руку, коли ми у потрібній смузі */
+  for(const s of stars){
+    if(s.got||!s.kind||!s.kind.startsWith('gem'))continue;const d=s.s-P.s;
+    if(d>-1.8&&d<3.2&&Math.abs(P.x-laneX[s.l])<1.2){if(s.kind==='gemU')ty=-1;else tx=s.kind==='gemL'?-1:1;break}
+  }
+  /* зміна смуги: один помах за раз, потім повернення в центр */
+  const tgt=botPlan();BOT.tgt=tgt;
+  if(!tx&&!P.onTrain){
+    if(BOT.fl){if(input.laneIdx!==BOT.fl.from||t-BOT.fl.t>0.5){BOT.fl=null}else tx=BOT.fl.dir*0.9}
+    if(!BOT.fl&&tgt!==input.laneIdx&&Math.abs(BOT.kx)<0.2){BOT.fl={dir:Math.sign(tgt-input.laneIdx),from:input.laneIdx,t};tx=BOT.fl.dir*0.9}
+  }
+  const k=1-Math.exp(-dt*30);BOT.kx+=(tx-BOT.kx)*k;BOT.ky+=(ty-BOT.ky)*k;
+  joyDrive(BOT.kx,BOT.ky);
+  if(punch){emit('punch');$('jpunch').classList.add('on');setTimeout(()=>$('jpunch').classList.remove('on'),130)}
+}
+setCtrl(S.ctrl);
+
 /* ================= головний цикл ================= */
 let last=performance.now();
 function frame(ms){
@@ -2361,10 +2498,11 @@ function frame(ms){
   const dt=Math.min(0.05,(ms-last)/1000);last=ms;const t=now();
   trackerUpdate();
   /* камера втратила гравця -> автопауза */
-  if(tr.on&&tr.calibrated&&(state==='playing'||state==='tutorial')&&t-tr.lastPose>0.8){prevState=state;setState('lost')}
+  if(S.ctrl==='body'&&tr.on&&tr.calibrated&&(state==='playing'||state==='tutorial')&&t-tr.lastPose>0.8){prevState=state;setState('lost')}
   else if(state==='lost'&&t-tr.lastPose<0.4)setState(prevState);
   const active=state==='playing'||state==='tutorial';
   if(active||state==='menu'){
+    if(S.ctrl==='bot'&&state==='playing')botThink(dt,t);
     updateGame(dt,state==='playing');
     if(state==='playing'){genAhead();updateChunks();cleanup()}
   }
