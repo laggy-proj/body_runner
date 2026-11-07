@@ -2,12 +2,12 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
 <title>Body Runner 3D</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#0e1a2b;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#fff;overflow:hidden}
-#app{display:grid;grid-template-columns:3fr 1fr;height:100vh;width:100vw}
+#app{display:grid;grid-template-columns:3fr 1fr;height:100vh;height:100dvh;width:100vw}
 #stage{position:relative;overflow:hidden;background:#8fd3ff}
 #gl{position:absolute;inset:0;width:100%;height:100%;display:block}
 #side{background:#14233a;border-left:3px solid #26406a;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
@@ -83,6 +83,34 @@ body.ctl-joy #joyzone{display:block}
 #cprog{width:320px;height:16px;border-radius:10px;background:rgba(255,255,255,.2);overflow:hidden}
 #cprogf{height:100%;width:0;background:#2fc36b}
 @media(max-width:800px){#app{grid-template-columns:1fr;grid-template-rows:60vh 40vh}#side{border-left:0;border-top:3px solid #26406a}}
+#camMsg{position:fixed;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top));z-index:60;display:none;gap:8px;flex-direction:column;background:#14233a;border:3px solid #ffd23f;border-radius:16px;padding:12px;font-size:15px;line-height:1.4;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:70dvh;overflow:auto;user-select:text}
+#camMsg.show{display:flex}#camMsg[data-k=e]{border-color:#ff4b4b}
+#camrow{}
+#side.mini #camrow{display:none}
+@media(max-width:800px),(max-aspect-ratio:1/1){
+ #app,#app.pmini,#app.phide{grid-template-columns:1fr;grid-template-rows:1fr}
+ #side{position:fixed;left:0;right:0;bottom:0;z-index:8;max-height:64dvh;border-left:0;border-top:3px solid #26406a;border-radius:18px 18px 0 0;padding:10px 12px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+ #side #vwrap{aspect-ratio:4/3;max-height:30dvh;width:auto;margin:0 auto}
+ #side.mini{left:auto;right:8px;top:calc(64px + env(safe-area-inset-top));bottom:auto;width:30vw;max-height:none;border:2px solid #26406a;border-radius:14px;padding:6px;gap:4px}
+ #side.mini #vwrap{aspect-ratio:3/4;max-height:none;width:100%}
+ #side.mini #camrow{display:flex}#side.mini #camrow #calBtn{display:none}
+ #side.mini #camBtn{width:100%;padding:8px 4px;font-size:13px}
+ #side.mini #action{font-size:14px;padding:2px}
+ #side.mini #status{font-size:11px;padding:2px 4px}
+ #side.mini .minibar{flex-wrap:wrap;gap:4px}.minibar button{padding:6px 8px;font-size:11px;flex:1}
+ #side.hide{display:none}
+ #tutt{font-size:24px;text-align:center;padding:0 12px}
+ #cprog{width:70vw}
+ .card{max-width:94vw;max-height:92dvh;overflow-y:auto}
+ #app:has(#menu.show) #side.mini{top:auto;bottom:calc(10px + env(safe-area-inset-bottom));left:50%;right:auto;width:auto;transform:translateX(-50%);padding:6px;border-radius:30px;flex-direction:row;z-index:20}
+ #app:has(#menu.show) #side.mini>#vwrap,#app:has(#menu.show) #side.mini>.minibar,#app:has(#menu.show) #side.mini>#action{display:none}
+ #app:has(#menu.show) #side.mini #status{display:flex;max-width:46vw;max-height:2.4em;overflow:hidden;font-size:11px}
+ #app:has(#menu.show) #side.mini #camBtn{width:auto;padding:10px 16px;font-size:14px}
+ #side.mini #status{max-height:5em;overflow:hidden}
+ .card h1{font-size:30px}
+ #menu .card{padding:16px 14px}
+ #panShow{top:calc(64px + env(safe-area-inset-top))!important;bottom:auto!important}
+}
 </style>
 <script>
 /* ===== mini3: власний мінімальний 3D-рушій (без зовнішніх залежностей) — математика ===== */
@@ -822,7 +850,7 @@ window.THREE=T;
   <h3>КАМЕРА · все локально, відео не зберігається</h3>
   <div class="row"><button id="panMini" class="alt">Зменшити панель</button><button id="panHide" class="alt">Сховати панель</button></div>
   <div id="vwrap" class="keep"><video id="cam" playsinline muted></video><canvas id="skel"></canvas><div id="vph">Камера вимкнена</div></div>
-  <div class="row"><button id="camBtn">Увімкнути камеру</button><button id="calBtn" class="alt" disabled>Калібрування</button></div>
+  <div class="row" id="camrow"><button id="camBtn">Увімкнути камеру</button><button id="calBtn" class="alt" disabled>Калібрування</button></div>
   <div class="row"><span class="note">Вигляд камери:</span><button id="vVideo" class="alt sel">Відео</button><button id="vSkin" class="alt">Скін</button><button id="vOff" class="alt">Сховати</button></div>
   <div id="status" class="keep"><span id="dot"></span><span id="stext">Камера вимкнена</span></div>
   <div id="action" class="keep">WAITING</div>
@@ -848,6 +876,7 @@ const ema=(p,v,a)=>p==null?v:p+(v-p)*a;
 function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 const S={panel:'full',view:'video',map:+(localStorage.getItem('br_map')||0),mirror:true,seated:false,lanes:3,ctrl:'body',mode:'nolose',sens:1,smooth:0.45,volume:0.7,music:true};
 const input={kbdUp:false,kbdL:false,kbdR:false,laneIdx:1,camCrouch:false,kbdCrouch:false,joyUp:false,joyL:false,joyR:false,joyCrouch:false,get crouch(){return this.camCrouch||this.kbdCrouch||this.joyCrouch},jumpTs:-9,punchQ:[],flash:'',flashT:0,side:0};
+const MOBILE_MQ=window.matchMedia('(max-width:800px),(max-aspect-ratio:1/1)');if(MOBILE_MQ.matches)S.panel='mini';
 let state='menu',prevState='menu',afterCalib=null;
 let totalCoins=+(localStorage.getItem('br_coins')||0),totalStars=+(localStorage.getItem('br_stars')||0),suit=+(localStorage.getItem('br_suit')||0);
 const SUITS=[{c:0x2f8cff,need:0,n:'синій'},{c:0xe8453c,need:25,n:'червоний'},{c:0x2fc36b,need:60,n:'зелений'},{c:0xffc21a,need:120,n:'золотий'}];
@@ -950,32 +979,79 @@ function reach(t){
   }
   r.up=r.handUp||P.y>0.55;return r;
 }
+function camNote(txt,kind){
+  let el=$('camMsg');
+  if(!el){el=document.createElement('div');el.id='camMsg';el.innerHTML='<div id="camMsgT"></div><button id="camMsgX" class="alt">Закрити</button>';document.body.appendChild(el);$('camMsgX').onclick=()=>el.classList.remove('show')}
+  if(!txt){el.classList.remove('show');return}
+  $('camMsgT').textContent=txt;el.dataset.k=kind||'i';el.classList.add('show');
+}
 function setStatus(txt,col){$('stext').textContent=txt;$('dot').style.background=col==='g'?'#2fe06b':col==='y'?'#ffd23f':'#e04b4b'}
+function permHelp(){
+  let fr=false;try{fr=window.self!==window.top}catch(e){fr=true}
+  if(fr)return'Гра відкрита у вбудованому вікні, яке не дає запит на камеру. Відкрийте файл напряму в Chrome (меню ⋮ → «Відкрити в Chrome»).'+camDiag();
+  const ua=navigator.userAgent||'',ios=/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1),and=/Android/i.test(ua),chrome=/Chrome|CriOS/.test(ua)&&!/Edg|OPR/.test(ua),ff=/Firefox|FxiOS/.test(ua);
+  if(and&&chrome)return'Android + Chrome: торкніться значка біля адреси (замок/налаштування) → «Дозволи» → «Камера» → «Дозволити», потім натисніть кнопку ще раз. Якщо Chrome взагалі не питає: Налаштування Android → Програми → Chrome → Дозволи → Камера.';
+  if(and)return'Android: торкніться значка біля адреси → «Дозволи» → «Камера» → «Дозволити». Якщо не допомагає: Налаштування Android → Програми → ваш браузер → Дозволи → Камера.';
+  if(ios)return'iPhone/iPad: Налаштування → браузер (Safari/Chrome) → Камера → «Дозволити», потім перезавантажте сторінку.';
+  if(ff)return'Firefox: значок камери в адресному рядку → зніміть блокування для цього сайту.';
+  return'Натисніть значок камери або замка в адресному рядку, дозвольте доступ і спробуйте ще раз.';
+}
+let camPS='?',camEM='';
+function camDiag(){
+  let framed=false;try{framed=window.self!==window.top}catch(e){framed=true}
+  const proto=location.protocol,host=location.host||'(без адреси)';
+  return ' [Діагностика: адреса '+proto+'//'+host+'; безпечний контекст: '+(window.isSecureContext?'так':'НІ')+'; mediaDevices: '+(navigator.mediaDevices?'є':'НЕМАЄ')+'; у вбудованому вікні: '+(framed?'ТАК':'ні')+'; стан дозволу: '+camPS+'; помилка: '+camEM+']';
+}
 function camErr(e){
   const n=e&&e.name;
-  if(n==='NotAllowedError'||n==='SecurityError')return'Доступ до камери заборонено. Натисніть значок камери в адресному рядку, дозвольте доступ і спробуйте ще раз.';
+  if(n==='InsecureContext'){
+    let framed=false;try{framed=window.self!==window.top}catch(x){framed=true}
+    if(framed)return'Гра відкрита у вбудованому вікні (перегляд у застосунку чи месенджері), яке забороняє камеру без запиту. Відкрийте файл безпосередньо в Chrome: меню ⋮ → «Відкрити в Chrome» / «Відкрити в браузері».'+camDiag();
+    if(location.protocol==='file:'||location.protocol==='content:')return'Файл відкрито локально ('+location.protocol+'). Chrome не показує запит на камеру для локальних файлів, навіть якщо дозвіл увімкнено. Розмістіть файл на https (Netlify Drop, GitHub Pages) або запустіть сервер на комп’ютері й відкрийте на телефоні через chrome://flags → «Insecure origins treated as secure» (додайте адресу http://IP:порт).'+camDiag();
+    return'Адреса '+location.protocol+'//'+location.host+' не вважається безпечною, тому Chrome не дає запит на камеру. Потрібен https:// або localhost. На Android Chrome для тесту: chrome://flags → «Insecure origins treated as secure» → додайте цю адресу → Enable → перезапустіть Chrome.'+camDiag();
+  }
+  if(n==='NotAllowedError'&&/Permission dismissed/i.test(e.message||''))return'Запит дозволу закрито. Торкніться «Увімкнути камеру» ще раз і натисніть «Дозволити».';
+  if(n==='NotAllowedError'||n==='SecurityError'){
+    const local=location.protocol==='file:'||location.protocol==='content:';
+    if(local)return'Сторінка відкрита як локальний файл ('+location.protocol+'). Chrome на Android не показує запит на камеру для таких сторінок, і дозвіл у налаштуваннях сайту тут не працює. Розмістіть файл на https (наприклад Netlify Drop) і відкрийте посилання в Chrome.'+camDiag();
+    if(/system/i.test(e.message||''))return'Камеру заблоковано на рівні Android для Chrome. Налаштування Android → Програми → Chrome → Дозволи → Камера → «Дозволити лише під час використання програми». Потім повністю закрийте й відкрийте Chrome.'+camDiag();
+    if(camPS==='prompt')return'Chrome не показав запит на камеру, хоча дозвіл не заблоковано. Перезавантажте сторінку й ще раз торкніться кнопки; якщо повторюється, відкрийте сторінку в новій вкладці Chrome (не у вікні застосунку).'+camDiag();
+    return'Доступ до камери заборонено. '+permHelp()+camDiag();
+  }
   if(n==='NotFoundError'||n==='DevicesNotFoundError')return'Камеру не знайдено. Підключіть вебкамеру.';
   if(n==='NotReadableError'||n==='AbortError')return'Камеру зайняла інша програма (Zoom, Teams…). Закрийте її та спробуйте ще раз.';
-  return(e&&e.message)||String(e);
+  return((e&&e.message)||String(e))+camDiag();
 }
 async function startCamera(){
   if(tr.on||tr.starting)return;tr.starting=true;audioInit();
   $('camBtn').disabled=true;setStatus('Запит доступу до камери…','y');
+  camNote('Запит доступу до камери… Якщо Chrome показав вікно, натисніть «Дозволити».','i');
+  const hangT=setTimeout(()=>{if(tr.starting&&!tr.video.srcObject)camNote('Браузер не показав запит на камеру за 8 секунд. Найчастіші причини: сторінка відкрита не через https (або у вбудованому вікні), або для сайту камеру заблоковано. Торкніться значка біля адреси → Дозволи → Камера → Дозволити, потім перезавантажте сторінку.'+camDiag(),'e')},8000);
   try{
     if(!tr.video.srcObject){
       if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
-        throw new Error('Браузер блокує камеру на цій адресі. Відкрийте гру через http://localhost (python3 -m http.server) або https, а не через file:// чи вбудований перегляд.');
-      let stream;
-      try{stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'},audio:false})}
-      catch(e){if(e.name==='OverconstrainedError'||e.name==='NotFoundError')stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});else throw e}
+        throw Object.assign(new Error('insecure'),{name:'InsecureContext'});
+      const portrait=MOBILE_MQ.matches;
+      const tries=[
+        {video:{facingMode:{ideal:'user'},width:{ideal:portrait?480:640},height:{ideal:portrait?640:480}},audio:false},
+        {video:{facingMode:{ideal:'user'}},audio:false},
+        {video:true,audio:false}];
+      let stream=null,lastErr=null;
+      for(const c of tries){
+        try{stream=await navigator.mediaDevices.getUserMedia(c);break}
+        catch(e){lastErr=e;if(e.name==='NotAllowedError'||e.name==='SecurityError'||e.name==='NotReadableError'||e.name==='AbortError')throw e}
+      }
+      if(!stream)throw lastErr||new Error('Камера недоступна');
       tr.video.srcObject=stream;
     }
-    tr.video.muted=true;await tr.video.play();$('vph').style.display='none';
+    tr.video.muted=true;tr.video.setAttribute('playsinline','');tr.video.setAttribute('webkit-playsinline','');
+    await Promise.race([tr.video.play(),new Promise((_,rj)=>setTimeout(()=>rj(Object.assign(new Error('Відео з камери не запустилось. Торкніться кнопки ще раз.'),{name:'PlayTimeout'})),6000))]);
+    $('vph').style.display='none';
   }catch(e){
-    console.error(e);setStatus(camErr(e),'r');$('vph').textContent=camErr(e);stopCamera(true);tr.starting=false;return;
+    clearTimeout(hangT);console.error(e);camEM=(e&&e.name||'')+' / '+(e&&e.message||'');try{camPS=(await navigator.permissions.query({name:'camera'})).state}catch(x){camPS='недоступно'}const em=camErr(e);setStatus(em,'r');$('vph').textContent=em;camNote(em,'e');stopCamera(true);tr.starting=false;return;
   }
   try{
-    setStatus('Камера працює. Завантаження моделі розпізнавання…','y');
+    clearTimeout(hangT);camNote('');setStatus('Камера працює. Завантаження моделі розпізнавання…','y');
     const mp=await loadMP();
     const fs=await mp.FilesetResolver.forVisionTasks(mp.base+'/wasm');
     let modelUrl=MODEL_URL;if(mp.base==='./mediapipe'){try{const r=await fetch('./mediapipe/pose_landmarker_lite.task',{method:'HEAD'});if(r.ok)modelUrl='./mediapipe/pose_landmarker_lite.task'}catch(e){}}
@@ -984,7 +1060,7 @@ async function startCamera(){
     tr.on=true;tr.calibrated=false;$('camBtn').textContent='Вимкнути камеру';$('camBtn').disabled=false;$('calBtn').disabled=false;
     setStatus('Тіло не знайдено — стань у кадр','r');
   }catch(e){
-    console.error(e);setStatus('Камера є, але модель не завантажилась ('+((e&&e.message)||e)+'). Потрібен інтернет або локальна папка mediapipe (див. download_mediapipe.py). Клавіатура працює без камери.','r');
+    console.error(e);camNote('Камера є, але модель розпізнавання не завантажилась: потрібен інтернет (завантажується з jsdelivr/unpkg). Клавіатура та джойстик працюють без камери.','e');setStatus('Камера є, але модель не завантажилась ('+((e&&e.message)||e)+'). Потрібен інтернет або локальна папка mediapipe (див. download_mediapipe.py). Клавіатура працює без камери.','r');
     $('camBtn').textContent='Повторити';$('camBtn').disabled=false;
   }
   tr.starting=false;
