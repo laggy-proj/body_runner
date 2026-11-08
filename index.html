@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="uk">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
@@ -12,8 +12,8 @@ html,body{margin:0;height:100%;background:#0e1a2b;font-family:"Trebuchet MS","Se
 #gl{position:absolute;inset:0;width:100%;height:100%;display:block}
 #side{background:#14233a;border-left:3px solid #26406a;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
 #side h3{margin:0;font-size:15px;letter-spacing:.5px;color:#9fd0ff}
-#vwrap{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:12px;overflow:hidden;border:2px solid #2b4a7a}
-#cam,#skel{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);object-fit:cover}
+#vwrap{flex:none;position:relative;width:100%;aspect-ratio:var(--vr,4/3);background:#000;border-radius:12px;overflow:hidden;border:2px solid #2b4a7a}
+#cam,#skel{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);object-fit:fill}
 #side.mini{position:fixed;right:12px;bottom:12px;width:250px;z-index:8;height:auto;border:3px solid #26406a;border-radius:16px;padding:8px;gap:6px;box-shadow:0 8px 30px rgba(0,0,0,.45)}
 #side.mini>:not(.keep){display:none}
 #side.hide{display:none}
@@ -24,7 +24,7 @@ html,body{margin:0;height:100%;background:#0e1a2b;font-family:"Trebuchet MS","Se
 #vwrap.skinmode #cam{visibility:hidden}
 #vwrap.offmode #cam,#vwrap.offmode #skel{display:none}
 #vwrap.offmode{background:#0b1626}
-#vwrap.offmode::after{content:'Камеру приховано · розпізнавання працює';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;font-size:13px;color:#8aa7cc}
+#vwrap.offmode::after{content:'Camera hidden · tracking still works';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;font-size:13px;color:#8aa7cc}
 #panShow{position:absolute;right:14px;bottom:14px;z-index:7}
 #vph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;font-size:13px;color:#8aa7cc}
 button{font:inherit;cursor:pointer;border:0;border-radius:12px;padding:10px 14px;font-weight:700;color:#fff;background:#2f7bff;box-shadow:0 3px 0 #1b4fb3;transition:transform .08s}
@@ -85,14 +85,22 @@ body.ctl-joy #joyzone{display:block}
 @media(max-width:800px){#app{grid-template-columns:1fr;grid-template-rows:60vh 40vh}#side{border-left:0;border-top:3px solid #26406a}}
 #camMsg{position:fixed;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top));z-index:60;display:none;gap:8px;flex-direction:column;background:#14233a;border:3px solid #ffd23f;border-radius:16px;padding:12px;font-size:15px;line-height:1.4;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:70dvh;overflow:auto;user-select:text}
 #camMsg.show{display:flex}#camMsg[data-k=e]{border-color:#ff4b4b}
+#vres{position:absolute;left:6px;bottom:4px;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
+#side.mini #vres{display:none}
 #camrow{}
 #side.mini #camrow{display:none}
 @media(max-width:800px),(max-aspect-ratio:1/1){
  #app,#app.pmini,#app.phide{grid-template-columns:1fr;grid-template-rows:1fr}
  #side{position:fixed;left:0;right:0;bottom:0;z-index:8;max-height:64dvh;border-left:0;border-top:3px solid #26406a;border-radius:18px 18px 0 0;padding:10px 12px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.5)}
- #side #vwrap{aspect-ratio:4/3;max-height:30dvh;width:auto;margin:0 auto}
+ #side #vwrap{aspect-ratio:var(--vr,4/3);width:min(100%,30dvh);margin:0 auto}
+ #side:not(.mini):not(.hide){top:0;max-height:none;height:100dvh;border-radius:0;border-top:0;padding-top:calc(10px + env(safe-area-inset-top));overflow-y:auto}
+ #side:not(.mini) #vwrap{width:min(100%,46dvh)}
+ #side.mini #status,#side.mini .legend{display:none}
+ #side.mini #viewCycle{display:none}
+ #side.mini.camon #camrow{display:none}
+ #side.mini #action{font-size:12px;padding:1px 0}
  #side.mini{left:auto;right:8px;top:calc(64px + env(safe-area-inset-top));bottom:auto;width:30vw;max-height:none;border:2px solid #26406a;border-radius:14px;padding:6px;gap:4px}
- #side.mini #vwrap{aspect-ratio:3/4;max-height:none;width:100%}
+ #side.mini #vwrap{aspect-ratio:var(--vr,3/4);max-height:none;width:100%}
  #side.mini #camrow{display:flex}#side.mini #camrow #calBtn{display:none}
  #side.mini #camBtn{width:100%;padding:8px 4px;font-size:13px}
  #side.mini #action{font-size:14px;padding:2px}
@@ -579,7 +587,7 @@ class WebGLRenderer{
   constructor(o={}){
     const canvas=o.canvas||document.createElement('canvas');this.domElement=canvas;
     const gl=canvas.getContext('webgl2',{antialias:o.antialias!==false,powerPreference:o.powerPreference||'default',alpha:false,stencil:false});
-    if(!gl)throw new Error('WebGL2 недоступний');
+    if(!gl)throw new Error('WebGL2 is not available');
     this.gl=gl;this.shadowMap={enabled:false,type:2};this.toneMapping=0;this.toneMappingExposure=1;this._pr=1;this._w=canvas.width||300;this._h=canvas.height||150;this._style=false;
     this._progs=new Map();this._frame=0;this._white=null;this._texs=new WeakMap();this._shadow=null;
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);
@@ -803,65 +811,65 @@ window.THREE=T;
   <canvas id="gl"></canvas>
   <div id="joyzone"></div>
   <div id="joy"><svg viewBox="0 0 150 150"><circle cx="75" cy="75" r="68" fill="rgba(10,20,40,.35)" stroke="#fff" stroke-width="4" stroke-opacity=".85"/><circle cx="75" cy="75" r="30" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"><path d="M65 26l10-10 10 10"/><path d="M65 124l10 10 10-10"/><path d="M26 65l-10 10 10 10"/><path d="M124 65l10 10-10 10"/></g></svg><div id="jknob"></div><div id="jtag"></div></div>
-  <button id="jpunch">УДАР</button>
+  <button id="jpunch">PUNCH</button>
   <div id="jhint"></div>
   <div id="hud">
    <div id="stars"><svg width="30" height="30" viewBox="0 0 24 24"><path fill="#ffd23f" stroke="#b57b00" stroke-width="1.2" d="M12 2l3 6.6 7.2.8-5.4 4.8 1.6 7.1L12 17.6 5.6 21.3l1.6-7.1L1.8 9.4 9 8.6z"/></svg><span id="starn">0</span></div>
    <div id="coins"><svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#ffc21a" stroke="#b57b00" stroke-width="2"/><circle cx="12" cy="12" r="6" fill="none" stroke="#ffe27a" stroke-width="2"/></svg><span id="coinn">0</span></div>
-   <div id="lvl"><div id="lvlt">Рівень 1</div><div id="bar"><div id="barf"></div></div></div>
+   <div id="lvl"><div id="lvlt">Level 1</div><div id="bar"><div id="barf"></div></div></div>
    <div id="hint"></div>
   </div>
-  <button id="pausebtn" class="alt" style="display:none">Пауза</button>
-  <button id="panShow" class="alt" style="display:none">Показати камеру</button>
+  <button id="pausebtn" class="alt" style="display:none">Pause</button>
+  <button id="panShow" class="alt" style="display:none">Show camera</button>
   <div id="banner"></div>
 
   <div id="menu" class="ov show">
    <div class="card">
     <h1>BODY RUNNER 3D</h1>
-    <p>Біжи, стрибай та перемагай перешкоди власним тілом!</p>
-    <p style="margin-top:14px"><b>Смуги</b></p>
-    <div class="row" style="justify-content:center"><button id="l2" class="alt">2 смуги</button><button id="l3" class="alt sel">3 смуги</button></div>
-    <p style="margin-top:12px"><b>Поза гравця</b></p>
-    <div class="row" style="justify-content:center"><button id="p1" class="alt sel">Стоячи</button><button id="p2" class="alt">Сидячи</button></div>
+    <p>Run, jump and beat the obstacles with your own body!</p>
+    <p style="margin-top:14px"><b>Lanes</b></p>
+    <div class="row" style="justify-content:center"><button id="l2" class="alt">2 lanes</button><button id="l3" class="alt sel">3 lanes</button></div>
+    <p style="margin-top:12px"><b>Player pose</b></p>
+    <div class="row" style="justify-content:center"><button id="p1" class="alt sel">Standing</button><button id="p2" class="alt">Seated</button></div>
     <p id="posenote" class="note"></p>
-    <p style="margin-top:12px"><b>Керування</b></p>
-    <div class="row" style="justify-content:center"><button id="c1" class="alt sel">Тіло (камера)</button><button id="c2" class="alt">Джойстик</button><button id="c3" class="alt">Бот</button></div>
+    <p style="margin-top:12px"><b>Controls</b></p>
+    <div class="row" style="justify-content:center"><button id="c1" class="alt sel">Body (camera)</button><button id="c2" class="alt">Joystick</button><button id="c3" class="alt">Bot</button></div>
     <p id="ctlnote" class="note"></p>
-    <p style="margin-top:12px"><b>Режим</b></p>
-    <div class="row" style="justify-content:center"><button id="m1" class="alt sel">Без програшу</button><button id="m2" class="alt">Вільний біг</button></div>
-    <p style="margin-top:12px"><b>Персонаж</b></p>
+    <p style="margin-top:12px"><b>Mode</b></p>
+    <div class="row" style="justify-content:center"><button id="m1" class="alt sel">No-lose</button><button id="m2" class="alt">Free run</button></div>
+    <p style="margin-top:12px"><b>Character</b></p>
     <div class="row" style="justify-content:center" id="chars"></div>
-    <p style="margin-top:12px"><b>Карта</b></p>
+    <p style="margin-top:12px"><b>Map</b></p>
     <div class="row" style="justify-content:center" id="maps"></div>
-    <p style="margin-top:12px"><b>Костюм</b> <span class="note" id="suitnote"></span></p>
+    <p style="margin-top:12px"><b>Suit</b> <span class="note" id="suitnote"></span></p>
     <div class="row" style="justify-content:center" id="suits"></div>
-    <div class="row" style="justify-content:center;margin-top:16px"><button id="tutbtn" class="alt">Навчання</button><button id="play" class="go">ГРАТИ</button></div>
-    <p class="note">Без камери (тест): стрілки ←/→, пробіл або ↑ — стрибок, ↓ — присісти, F — удар, R — руки вгору, Q/E — ліва/права рука вбік.</p>
+    <div class="row" style="justify-content:center;margin-top:16px"><button id="tutbtn" class="alt">Tutorial</button><button id="play" class="go">PLAY</button></div>
+    <p class="note">No camera (test): arrows ←/→, space or ↑ = jump, ↓ = crouch, F = punch, R = arms up, Q/E = left/right arm sideways.</p>
    </div>
   </div>
 
-  <div id="calib" class="ov"><div class="card"><h2>Калібрування</h2><p id="calt">Стань посеред кадру так, щоб було видно тіло до колін.</p><div id="cprog"><div id="cprogf"></div></div><div class="row" style="justify-content:center;margin-top:10px"><button id="calcancel" class="alt">Скасувати</button></div></div></div>
-  <div id="lost" class="ov"><div class="card"><h2>Не бачу тебе</h2><p>Стань у кадр — гра почекає та продовжиться з того самого місця.</p></div></div>
-  <div id="pause" class="ov"><div class="card"><h2>Пауза</h2><div class="row" style="justify-content:center"><button id="resume" class="go">Продовжити</button><button id="tomenu" class="alt">У меню</button></div></div></div>
-  <div id="tut"><div id="tutt"></div><div class="dots" id="tutd"></div><button id="tutexit" class="alt">Вийти з навчання</button></div>
+  <div id="calib" class="ov"><div class="card"><h2>Calibration</h2><p id="calt">Stand in the middle of the frame so your body is visible down to the knees.</p><div id="cprog"><div id="cprogf"></div></div><div class="row" style="justify-content:center;margin-top:10px"><button id="calcancel" class="alt">Cancel</button></div></div></div>
+  <div id="lost" class="ov"><div class="card"><h2>I can't see you</h2><p>Step into the frame — the game will wait and continue from the same spot.</p></div></div>
+  <div id="pause" class="ov"><div class="card"><h2>Pause</h2><div class="row" style="justify-content:center"><button id="resume" class="go">Resume</button><button id="tomenu" class="alt">To menu</button></div></div></div>
+  <div id="tut"><div id="tutt"></div><div class="dots" id="tutd"></div><button id="tutexit" class="alt">Exit tutorial</button></div>
  </div>
 
  <aside id="side">
-  <h3>КАМЕРА · все локально, відео не зберігається</h3>
-  <div class="row"><button id="panMini" class="alt">Зменшити панель</button><button id="panHide" class="alt">Сховати панель</button></div>
-  <div id="vwrap" class="keep"><video id="cam" playsinline muted></video><canvas id="skel"></canvas><div id="vph">Камера вимкнена</div></div>
-  <div class="row" id="camrow"><button id="camBtn">Увімкнути камеру</button><button id="calBtn" class="alt" disabled>Калібрування</button></div>
-  <div class="row"><span class="note">Вигляд камери:</span><button id="vVideo" class="alt sel">Відео</button><button id="vSkin" class="alt">Скін</button><button id="vOff" class="alt">Сховати</button></div>
-  <div id="status" class="keep"><span id="dot"></span><span id="stext">Камера вимкнена</span></div>
+  <h3>CAMERA · all local, video is never stored</h3>
+  <div class="row"><button id="panMini" class="alt">Shrink panel</button><button id="panHide" class="alt">Hide panel</button></div>
+  <div id="vwrap" class="keep"><video id="cam" playsinline muted></video><canvas id="skel"></canvas><div id="vph">Camera off</div><div id="vres"></div></div>
+  <div class="row" id="camrow"><button id="camBtn">Enable camera</button><button id="calBtn" class="alt" disabled>Calibration</button></div>
+  <div class="row"><span class="note">Camera view:</span><button id="vVideo" class="alt sel">Video</button><button id="vSkin" class="alt">Skin</button><button id="vOff" class="alt">Hide</button></div>
+  <div id="status" class="keep"><span id="dot"></span><span id="stext">Camera off</span></div>
   <div id="action" class="keep">WAITING</div>
-  <div class="row minibar keep"><button id="panExpand" class="alt">Розгорнути</button><button id="viewCycle" class="alt">Вигляд</button><button id="panHide2" class="alt">Сховати</button></div>
-  <div class="legend"><span><i style="background:#2fe06b"></i>добре</span><span><i style="background:#ffd23f"></i>невпевнено</span><span><i style="background:#ff4b4b"></i>не знайдено</span></div>
-  <label class="sl">Чутливість рухів <input id="sens" type="range" min="0.5" max="1.6" step="0.05" value="1"></label>
-  <label class="sl">Згладжування <input id="smooth" type="range" min="0" max="0.85" step="0.05" value="0.45"></label>
-  <label class="sl">Гучність <input id="vol" type="range" min="0" max="1" step="0.05" value="0.7"></label>
-  <label class="note"><input id="music" type="checkbox" checked> Музика</label>
-  <label class="note"><input id="mirror" type="checkbox" checked> Персонаж повторює мої руки</label>
-  <div class="note">Стоячи: нахил/крок убік — смуга; справжній стрибок; присідання; мах рукою вперед — удар. Сидячи: нахил корпусу; обидві руки вгору; пригнутися; рука вперед.</div>
+  <div class="row minibar keep"><button id="panExpand" class="alt">Expand</button><button id="viewCycle" class="alt">View</button><button id="panHide2" class="alt">Hide</button></div>
+  <div class="legend"><span><i style="background:#2fe06b"></i>good</span><span><i style="background:#ffd23f"></i>unsure</span><span><i style="background:#ff4b4b"></i>not found</span></div>
+  <label class="sl">Motion sensitivity <input id="sens" type="range" min="0.5" max="1.6" step="0.05" value="1"></label>
+  <label class="sl">Smoothing <input id="smooth" type="range" min="0" max="0.85" step="0.05" value="0.45"></label>
+  <label class="sl">Volume <input id="vol" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+  <label class="note"><input id="music" type="checkbox" checked> Music</label>
+  <label class="note"><input id="mirror" type="checkbox" checked> Character copies my arms</label>
+  <div class="note">Standing: lean/step sideways = lane; real jump; crouch; swing an arm forward = punch. Seated: lean torso; both arms up; bend forward; arm forward.</div>
  </aside>
 </div>
 
@@ -879,7 +887,7 @@ const input={kbdUp:false,kbdL:false,kbdR:false,laneIdx:1,camCrouch:false,kbdCrou
 const MOBILE_MQ=window.matchMedia('(max-width:800px),(max-aspect-ratio:1/1)');if(MOBILE_MQ.matches)S.panel='mini';
 let state='menu',prevState='menu',afterCalib=null;
 let totalCoins=+(localStorage.getItem('br_coins')||0),totalStars=+(localStorage.getItem('br_stars')||0),suit=+(localStorage.getItem('br_suit')||0);
-const SUITS=[{c:0x2f8cff,need:0,n:'синій'},{c:0xe8453c,need:25,n:'червоний'},{c:0x2fc36b,need:60,n:'зелений'},{c:0xffc21a,need:120,n:'золотий'}];
+const SUITS=[{c:0x2f8cff,need:0,n:'blue'},{c:0xe8453c,need:25,n:'red'},{c:0x2fc36b,need:60,n:'green'},{c:0xffc21a,need:120,n:'gold'}];
 
 /* ================= audio ================= */
 const AU={ctx:null,step:0,next:0};
@@ -929,7 +937,7 @@ function musicTick(){
 /* ================= actions / input bus ================= */
 const laneCount=()=>S.lanes;
 function flash(txt){input.flash=txt;input.flashT=now()}
-const TUT=[{k:'left',t:'Нахились ліворуч',n:1},{k:'right',t:'Нахились праворуч',n:1},{k:'jump',t:'Підстрибни 3 рази',ts:'Підніми обидві руки вгору 3 рази',n:3},{k:'crouch',t:'Присядь',ts:'Пригнись уперед',n:1},{k:'punch',t:'Махни руками вперед 3 рази',n:3},{k:'armsup',t:'Підніми руки вгору',n:2},{k:'armside',t:'Простягни руку вбік',n:2}];
+const TUT=[{k:'left',t:'Lean left',n:1},{k:'right',t:'Lean right',n:1},{k:'jump',t:'Jump 3 times',ts:'Raise both arms up 3 times',n:3},{k:'crouch',t:'Crouch',ts:'Bend forward',n:1},{k:'punch',t:'Swing your arms forward 3 times',n:3},{k:'armsup',t:'Raise your arms up',n:2},{k:'armside',t:'Reach an arm sideways',n:2}];
 let tut=null;
 function emit(type){
   const t=now();
@@ -981,87 +989,103 @@ function reach(t){
 }
 function camNote(txt,kind){
   let el=$('camMsg');
-  if(!el){el=document.createElement('div');el.id='camMsg';el.innerHTML='<div id="camMsgT"></div><button id="camMsgX" class="alt">Закрити</button>';document.body.appendChild(el);$('camMsgX').onclick=()=>el.classList.remove('show')}
+  if(!el){el=document.createElement('div');el.id='camMsg';el.innerHTML='<div id="camMsgT"></div><button id="camMsgX" class="alt">Close</button>';document.body.appendChild(el);$('camMsgX').onclick=()=>el.classList.remove('show')}
   if(!txt){el.classList.remove('show');return}
   $('camMsgT').textContent=txt;el.dataset.k=kind||'i';el.classList.add('show');
 }
 function setStatus(txt,col){$('stext').textContent=txt;$('dot').style.background=col==='g'?'#2fe06b':col==='y'?'#ffd23f':'#e04b4b'}
 function permHelp(){
   let fr=false;try{fr=window.self!==window.top}catch(e){fr=true}
-  if(fr)return'Гра відкрита у вбудованому вікні, яке не дає запит на камеру. Відкрийте файл напряму в Chrome (меню ⋮ → «Відкрити в Chrome»).'+camDiag();
+  if(fr)return'The game is open in an embedded window that blocks the camera prompt. Open it directly in Chrome (menu ⋮ → “Open in Chrome”).'+camDiag();
   const ua=navigator.userAgent||'',ios=/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1),and=/Android/i.test(ua),chrome=/Chrome|CriOS/.test(ua)&&!/Edg|OPR/.test(ua),ff=/Firefox|FxiOS/.test(ua);
-  if(and&&chrome)return'Android + Chrome: торкніться значка біля адреси (замок/налаштування) → «Дозволи» → «Камера» → «Дозволити», потім натисніть кнопку ще раз. Якщо Chrome взагалі не питає: Налаштування Android → Програми → Chrome → Дозволи → Камера.';
-  if(and)return'Android: торкніться значка біля адреси → «Дозволи» → «Камера» → «Дозволити». Якщо не допомагає: Налаштування Android → Програми → ваш браузер → Дозволи → Камера.';
-  if(ios)return'iPhone/iPad: Налаштування → браузер (Safari/Chrome) → Камера → «Дозволити», потім перезавантажте сторінку.';
-  if(ff)return'Firefox: значок камери в адресному рядку → зніміть блокування для цього сайту.';
-  return'Натисніть значок камери або замка в адресному рядку, дозвольте доступ і спробуйте ще раз.';
+  if(and&&chrome)return'Android + Chrome: tap the icon next to the address (lock/settings) → “Permissions” → “Camera” → “Allow”, then press the button again. If Chrome never asks: Android Settings → Apps → Chrome → Permissions → Camera.';
+  if(and)return'Android: tap the icon next to the address → “Permissions” → “Camera” → “Allow”. If that doesn’t help: Android Settings → Apps → your browser → Permissions → Camera.';
+  if(ios)return'iPhone/iPad: Settings → your browser (Safari/Chrome) → Camera → “Allow”, then reload the page.';
+  if(ff)return'Firefox: camera icon in the address bar → remove the block for this site.';
+  return'Click the camera or lock icon in the address bar, allow access and try again.';
 }
 let camPS='?',camEM='';
 function camDiag(){
   let framed=false;try{framed=window.self!==window.top}catch(e){framed=true}
-  const proto=location.protocol,host=location.host||'(без адреси)';
-  return ' [Діагностика: адреса '+proto+'//'+host+'; безпечний контекст: '+(window.isSecureContext?'так':'НІ')+'; mediaDevices: '+(navigator.mediaDevices?'є':'НЕМАЄ')+'; у вбудованому вікні: '+(framed?'ТАК':'ні')+'; стан дозволу: '+camPS+'; помилка: '+camEM+']';
+  const proto=location.protocol,host=location.host||'(no address)';
+  return ' [Diagnostics: address '+proto+'//'+host+'; secure context: '+(window.isSecureContext?'yes':'NO')+'; mediaDevices: '+(navigator.mediaDevices?'present':'MISSING')+'; embedded window: '+(framed?'YES':'no')+'; permission state: '+camPS+'; error: '+camEM+']';
 }
 function camErr(e){
   const n=e&&e.name;
   if(n==='InsecureContext'){
     let framed=false;try{framed=window.self!==window.top}catch(x){framed=true}
-    if(framed)return'Гра відкрита у вбудованому вікні (перегляд у застосунку чи месенджері), яке забороняє камеру без запиту. Відкрийте файл безпосередньо в Chrome: меню ⋮ → «Відкрити в Chrome» / «Відкрити в браузері».'+camDiag();
-    if(location.protocol==='file:'||location.protocol==='content:')return'Файл відкрито локально ('+location.protocol+'). Chrome не показує запит на камеру для локальних файлів, навіть якщо дозвіл увімкнено. Розмістіть файл на https (Netlify Drop, GitHub Pages) або запустіть сервер на комп’ютері й відкрийте на телефоні через chrome://flags → «Insecure origins treated as secure» (додайте адресу http://IP:порт).'+camDiag();
-    return'Адреса '+location.protocol+'//'+location.host+' не вважається безпечною, тому Chrome не дає запит на камеру. Потрібен https:// або localhost. На Android Chrome для тесту: chrome://flags → «Insecure origins treated as secure» → додайте цю адресу → Enable → перезапустіть Chrome.'+camDiag();
+    if(framed)return'The game is open in an embedded window (an app or messenger preview) that blocks the camera. Open the file directly in Chrome: menu ⋮ → “Open in Chrome” / “Open in browser”.'+camDiag();
+    if(location.protocol==='file:'||location.protocol==='content:')return'The file was opened locally ('+location.protocol+'). Chrome does not show a camera prompt for local files, even if permission is on. Host the file over https (Netlify Drop, GitHub Pages) or run a server on your computer and open it on the phone via chrome://flags → “Insecure origins treated as secure” (add http://IP:port).'+camDiag();
+    return' The address '+location.protocol+'//'+location.host+' is not considered secure, so Chrome shows no camera prompt. https:// or localhost is required. For testing on Android Chrome: chrome://flags → “Insecure origins treated as secure” → add this address → Enable → restart Chrome.'+camDiag();
   }
-  if(n==='NotAllowedError'&&/Permission dismissed/i.test(e.message||''))return'Запит дозволу закрито. Торкніться «Увімкнути камеру» ще раз і натисніть «Дозволити».';
+  if(n==='NotAllowedError'&&/Permission dismissed/i.test(e.message||''))return'The permission prompt was dismissed. Tap “Enable camera” again and press “Allow”.';
   if(n==='NotAllowedError'||n==='SecurityError'){
     const local=location.protocol==='file:'||location.protocol==='content:';
-    if(local)return'Сторінка відкрита як локальний файл ('+location.protocol+'). Chrome на Android не показує запит на камеру для таких сторінок, і дозвіл у налаштуваннях сайту тут не працює. Розмістіть файл на https (наприклад Netlify Drop) і відкрийте посилання в Chrome.'+camDiag();
-    if(/system/i.test(e.message||''))return'Камеру заблоковано на рівні Android для Chrome. Налаштування Android → Програми → Chrome → Дозволи → Камера → «Дозволити лише під час використання програми». Потім повністю закрийте й відкрийте Chrome.'+camDiag();
-    if(camPS==='prompt')return'Chrome не показав запит на камеру, хоча дозвіл не заблоковано. Перезавантажте сторінку й ще раз торкніться кнопки; якщо повторюється, відкрийте сторінку в новій вкладці Chrome (не у вікні застосунку).'+camDiag();
-    return'Доступ до камери заборонено. '+permHelp()+camDiag();
+    if(local)return'The page is open as a local file ('+location.protocol+'). Chrome on Android shows no camera prompt for such pages, and the site permission does not apply. Host the file over https (for example Netlify Drop) and open the link in Chrome.'+camDiag();
+    if(/system/i.test(e.message||''))return'The camera is blocked by Android for Chrome. Android Settings → Apps → Chrome → Permissions → Camera → “Allow only while using the app”. Then fully close and reopen Chrome.'+camDiag();
+    if(camPS==='prompt')return'Chrome did not show a camera prompt although permission is not blocked. Reload the page and tap the button again; if it repeats, open the page in a new Chrome tab (not inside an app window).'+camDiag();
+    return'Camera access was denied. '+permHelp()+camDiag();
   }
-  if(n==='NotFoundError'||n==='DevicesNotFoundError')return'Камеру не знайдено. Підключіть вебкамеру.';
-  if(n==='NotReadableError'||n==='AbortError')return'Камеру зайняла інша програма (Zoom, Teams…). Закрийте її та спробуйте ще раз.';
+  if(n==='NotFoundError'||n==='DevicesNotFoundError')return'No camera found. Connect a webcam.';
+  if(n==='NotReadableError'||n==='AbortError')return'The camera is used by another app (Zoom, Teams…). Close it and try again.';
   return((e&&e.message)||String(e))+camDiag();
 }
 async function startCamera(){
   if(tr.on||tr.starting)return;tr.starting=true;audioInit();
-  $('camBtn').disabled=true;setStatus('Запит доступу до камери…','y');
-  camNote('Запит доступу до камери… Якщо Chrome показав вікно, натисніть «Дозволити».','i');
-  const hangT=setTimeout(()=>{if(tr.starting&&!tr.video.srcObject)camNote('Браузер не показав запит на камеру за 8 секунд. Найчастіші причини: сторінка відкрита не через https (або у вбудованому вікні), або для сайту камеру заблоковано. Торкніться значка біля адреси → Дозволи → Камера → Дозволити, потім перезавантажте сторінку.'+camDiag(),'e')},8000);
+  $('camBtn').disabled=true;setStatus('Requesting camera access…','y');
+  camNote('Requesting camera access… If Chrome shows a prompt, press “Allow”.','i');
+  const hangT=setTimeout(()=>{if(tr.starting&&!tr.video.srcObject)camNote('The browser did not show a camera prompt within 8 seconds. Common causes: the page is not served over https (or is in an embedded window), or the camera is blocked for this site. Tap the icon next to the address → Permissions → Camera → Allow, then reload the page.'+camDiag(),'e')},8000);
   try{
     if(!tr.video.srcObject){
       if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
         throw Object.assign(new Error('insecure'),{name:'InsecureContext'});
-      const portrait=MOBILE_MQ.matches;
-      const tries=[
-        {video:{facingMode:{ideal:'user'},width:{ideal:portrait?480:640},height:{ideal:portrait?640:480}},audio:false},
-        {video:{facingMode:{ideal:'user'}},audio:false},
-        {video:true,audio:false}];
-      let stream=null,lastErr=null;
+      const portrait=(innerHeight>innerWidth)&&(navigator.maxTouchPoints>0);
+      const F={facingMode:{ideal:'user'}};
+      const tries=portrait?[
+        {video:{...F,width:{ideal:960},height:{ideal:1280}},audio:false},
+        {video:{...F,width:{ideal:1280},height:{ideal:960}},audio:false},
+        {video:{...F,width:{ideal:480},height:{ideal:640}},audio:false},
+        {video:{...F,width:{ideal:640},height:{ideal:480}},audio:false},
+        {video:{...F,aspectRatio:{ideal:3/4}},audio:false},
+        {video:F,audio:false},{video:true,audio:false}
+      ]:[
+        {video:{...F,width:{ideal:960},height:{ideal:720}},audio:false},
+        {video:{...F,width:{ideal:640},height:{ideal:480}},audio:false},
+        {video:F,audio:false},{video:true,audio:false}];
+      let stream=null,lastErr=null,fallbackC=null;
       for(const c of tries){
-        try{stream=await navigator.mediaDevices.getUserMedia(c);break}
-        catch(e){lastErr=e;if(e.name==='NotAllowedError'||e.name==='SecurityError'||e.name==='NotReadableError'||e.name==='AbortError')throw e}
+        let s=null;
+        try{s=await navigator.mediaDevices.getUserMedia(c)}
+        catch(e){lastErr=e;if(e.name==='NotAllowedError'||e.name==='SecurityError'||e.name==='NotReadableError'||e.name==='AbortError')throw e;continue}
+        let st={};try{st=s.getVideoTracks()[0].getSettings()}catch(e){}
+        if(portrait&&st.width&&st.height&&st.width>st.height){ // got a landscape (cropped) frame on a portrait phone: try the next variant
+          if(!fallbackC)fallbackC=c;s.getTracks().forEach(t=>t.stop());
+          continue}
+        stream=s;break;
       }
-      if(!stream)throw lastErr||new Error('Камера недоступна');
+      if(!stream&&fallbackC)stream=await navigator.mediaDevices.getUserMedia(fallbackC);
+      if(!stream)throw lastErr||new Error('Camera unavailable');
       tr.video.srcObject=stream;
     }
     tr.video.muted=true;tr.video.setAttribute('playsinline','');tr.video.setAttribute('webkit-playsinline','');
-    await Promise.race([tr.video.play(),new Promise((_,rj)=>setTimeout(()=>rj(Object.assign(new Error('Відео з камери не запустилось. Торкніться кнопки ще раз.'),{name:'PlayTimeout'})),6000))]);
+    await Promise.race([tr.video.play(),new Promise((_,rj)=>setTimeout(()=>rj(Object.assign(new Error('The camera video did not start. Tap the button again.'),{name:'PlayTimeout'})),6000))]);
     $('vph').style.display='none';
+    if(tr.video.videoWidth){$('vwrap').style.setProperty('--vr',tr.video.videoWidth+'/'+tr.video.videoHeight);$('vres').textContent=tr.video.videoWidth+'×'+tr.video.videoHeight}
   }catch(e){
-    clearTimeout(hangT);console.error(e);camEM=(e&&e.name||'')+' / '+(e&&e.message||'');try{camPS=(await navigator.permissions.query({name:'camera'})).state}catch(x){camPS='недоступно'}const em=camErr(e);setStatus(em,'r');$('vph').textContent=em;camNote(em,'e');stopCamera(true);tr.starting=false;return;
+    clearTimeout(hangT);console.error(e);camEM=(e&&e.name||'')+' / '+(e&&e.message||'');try{camPS=(await navigator.permissions.query({name:'camera'})).state}catch(x){camPS='unavailable'}const em=camErr(e);setStatus(em,'r');$('vph').textContent=em;camNote(em,'e');stopCamera(true);tr.starting=false;return;
   }
   try{
-    clearTimeout(hangT);camNote('');setStatus('Камера працює. Завантаження моделі розпізнавання…','y');
+    clearTimeout(hangT);camNote('');{let rs='';try{const st=stream.getVideoTracks()[0].getSettings();rs=' ('+st.width+'×'+st.height+')'}catch(e){}setStatus('Camera is on'+rs+'. Loading the tracking model…','y')}
     const mp=await loadMP();
     const fs=await mp.FilesetResolver.forVisionTasks(mp.base+'/wasm');
     let modelUrl=MODEL_URL;if(mp.base==='./mediapipe'){try{const r=await fetch('./mediapipe/pose_landmarker_lite.task',{method:'HEAD'});if(r.ok)modelUrl='./mediapipe/pose_landmarker_lite.task'}catch(e){}}
     const make=d=>mp.PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:modelUrl,delegate:d},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
     try{tr.pl=await make('GPU')}catch(e){console.warn('GPU delegate failed',e);tr.pl=await make('CPU')}
-    tr.on=true;tr.calibrated=false;$('camBtn').textContent='Вимкнути камеру';$('camBtn').disabled=false;$('calBtn').disabled=false;
-    setStatus('Тіло не знайдено — стань у кадр','r');
+    tr.on=true;$('side').classList.add('camon');tr.calibrated=false;$('camBtn').textContent='Disable camera';$('camBtn').disabled=false;$('calBtn').disabled=false;
+    setStatus('Body not found — step into the frame','r');
   }catch(e){
-    console.error(e);camNote('Камера є, але модель розпізнавання не завантажилась: потрібен інтернет (завантажується з jsdelivr/unpkg). Клавіатура та джойстик працюють без камери.','e');setStatus('Камера є, але модель не завантажилась ('+((e&&e.message)||e)+'). Потрібен інтернет або локальна папка mediapipe (див. download_mediapipe.py). Клавіатура працює без камери.','r');
-    $('camBtn').textContent='Повторити';$('camBtn').disabled=false;
+    console.error(e);camNote('The camera works, but the tracking model failed to load: internet is required (it loads from jsdelivr/unpkg). Keyboard and joystick work without the camera.','e');setStatus('The camera works, but the model failed to load ('+((e&&e.message)||e)+'). Internet or a local mediapipe folder is required (see download_mediapipe.py). The keyboard works without the camera.','r');
+    $('camBtn').textContent='Retry';$('camBtn').disabled=false;
   }
   tr.starting=false;
 }
@@ -1073,10 +1097,10 @@ async function loadMP(){
 function stopCamera(keepMsg){
   const s=tr.video.srcObject;if(s)s.getTracks().forEach(t=>t.stop());tr.video.srcObject=null;
   if(tr.pl){try{tr.pl.close()}catch(e){}tr.pl=null}
-  tr.on=false;tr.calibrated=false;tr.base=null;tr.found=false;input.camCrouch=false;
-  $('vph').style.display='flex';$('camBtn').textContent='Увімкнути камеру';$('camBtn').disabled=false;$('calBtn').disabled=true;
+  tr.on=false;$('side').classList.remove('camon');tr.calibrated=false;tr.base=null;tr.found=false;input.camCrouch=false;
+  $('vph').style.display='flex';$('camBtn').textContent='Enable camera';$('camBtn').disabled=false;$('calBtn').disabled=true;
   const c=$('skel').getContext('2d');c.clearRect(0,0,$('skel').width,$('skel').height);
-  if(!keepMsg)setStatus('Камера вимкнена','r');
+  if(!keepMsg)setStatus('Camera off','r');
 }
 const BONES=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,31],[28,32],[0,11],[0,12]];
 const JOINTS=[0,11,12,13,14,15,16,23,24,25,26,27,28,31,32];
@@ -1137,7 +1161,7 @@ function drawSkin(c,lm,w,h){
   for(const i of JOINTS){if(i<11&&i>0)continue;const p=lm[i];c.fillStyle=colorFor(p);c.globalAlpha=.9;c.beginPath();c.arc(p.x*w,p.y*h,3.5,0,7);c.fill();c.globalAlpha=1}
 }
 function drawSkeleton(lm){
-  const cv=$('skel'),v=tr.video;if(cv.width!==v.videoWidth){cv.width=v.videoWidth||640;cv.height=v.videoHeight||480}
+  const cv=$('skel'),v=tr.video;if(cv.width!==v.videoWidth){cv.width=v.videoWidth||640;cv.height=v.videoHeight||480;$('vwrap').style.setProperty('--vr',cv.width+'/'+cv.height)}
   const c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);
   if(S.view==='off')return;
   if(S.view==='skin'){drawSkin(c,lm,cv.width,cv.height);return}
@@ -1151,14 +1175,14 @@ function trackerUpdate(){
   tr.lastVT=tr.video.currentTime;
   let res;try{res=tr.pl.detectForVideo(tr.video,performance.now())}catch(e){return}
   const lm=res&&res.landmarks&&res.landmarks[0];
-  if(!lm){tr.found=false;drawSkeleton(null);if(now()-tr.lastPose>0.4)setStatus('Тіло не знайдено — стань у кадр','r');return}
+  if(!lm){tr.found=false;drawSkeleton(null);if(now()-tr.lastPose>0.4)setStatus('Body not found — step into the frame','r');return}
   drawSkeleton(lm);processPose(lm,now());
 }
 function processPose(lm,t){
   const dt=clamp(t-tr.lastT,0.016,0.1);tr.lastT=t;
   const conf=Math.min(...(S.seated?[11,12]:[11,12,23,24]).map(i=>lm[i].visibility??0));
-  if(conf<0.45){tr.found=false;setStatus('Невпевнене розпізнавання','y');return}
-  tr.found=true;tr.lastPose=t;setStatus(tr.calibrated?'Тіло знайдено · керування активне':'Тіло знайдено · потрібне калібрування','g');
+  if(conf<0.45){tr.found=false;setStatus('Unsure tracking','y');return}
+  tr.found=true;tr.lastPose=t;setStatus(tr.calibrated?'Body found · controls active':'Body found · calibration needed','g');
   const a=clamp(1-S.smooth,0.12,1);
   updateArms(lm,t,a);
   if(tr.calib&&tr.calib.active){calibStep(lm,t);return}
@@ -1173,15 +1197,15 @@ function measure(lm){
 }
 function startCalibration(cb){
   if(!tr.on)return;afterCalib=cb||null;tr.calib={active:true,okSince:null,samples:[]};
-  resetDetect();$('calt').textContent=S.seated?'Сядь прямо: у кадрі мають бути голова, плечі та руки.':'Стань посеред кадру так, щоб було видно тіло до колін.';
+  resetDetect();$('calt').textContent=S.seated?'Sit up straight: your head, shoulders and arms must be in the frame.':'Stand in the middle of the frame so your body is visible down to the knees.';
   if(state!=='calib')prevState=state;setState('calib');$('cprogf').style.width='0%';
 }
 function calibStep(lm,t){
   const c=tr.calib,ok=S.seated?[0,11,12].every(i=>(lm[i].visibility??0)>0.5):([11,12,23,24,25,26].every(i=>(lm[i].visibility??0)>0.5)&&lm[25].y<0.99&&lm[26].y<0.99);
-  if(!ok){c.okSince=null;c.samples=[];$('calt').textContent=S.seated?'Сядь прямо: у кадрі мають бути голова, плечі та руки.':'Покажи тіло до колін: відступи від камери на крок.';$('cprogf').style.width='0%';return}
+  if(!ok){c.okSince=null;c.samples=[];$('calt').textContent=S.seated?'Sit up straight: your head, shoulders and arms must be in the frame.':'Show your body down to the knees: step back from the camera.';$('cprogf').style.width='0%';return}
   if(c.okSince==null)c.okSince=t;const el=t-c.okSince;
-  if(el<1.2){$('calt').textContent='Чудово! Стій рівно, дивись у екран…';$('cprogf').style.width=(el/2*100)+'%';return}
-  c.samples.push(measure(lm));$('calt').textContent='Ще трохи… не рухайся';$('cprogf').style.width=(el/2*100)+'%';
+  if(el<1.2){$('calt').textContent='Great! Stand still and look at the screen…';$('cprogf').style.width=(el/2*100)+'%';return}
+  c.samples.push(measure(lm));$('calt').textContent='Almost there… don’t move';$('cprogf').style.width=(el/2*100)+'%';
   if(el>=2){
     const s=c.samples,avg=k=>s.reduce((x,m)=>x+m[k],0)/s.length;
     const withA=s.filter(m=>m.ankY!=null);
@@ -1447,7 +1471,7 @@ function buildTurtle(c){
   torso.add(mesh(G.cone,f.skin,0,0.04,0.36,0.08,0.2,0.08).rotateX(Math.PI/2+0.4));
   return f;
 }
-const CHARS=[{id:'boy',n:'Хлопець',b:buildBoy,sk:{kind:'boy',skin:0xffd0a6,bot:0x3b4f8a,hair:0x5a3418}},{id:'girl',n:'Дівчина',b:buildGirl,sk:{kind:'girl',skin:0xffd7b8,bot:0x7a3fbf,hair:0x7a3b1a}},{id:'bear',n:'Ведмідь',b:buildBear,sk:{kind:'bear',skin:0x9a6236,top:0x9a6236,bot:0x9a6236}},{id:'turtle',n:'Черепаха',b:buildTurtle,sk:{kind:'turtle',skin:0x6cc24a,top:0x6cc24a,bot:0x6cc24a,shell:0x2f9a55}}];
+const CHARS=[{id:'boy',n:'Boy',b:buildBoy,sk:{kind:'boy',skin:0xffd0a6,bot:0x3b4f8a,hair:0x5a3418}},{id:'girl',n:'Girl',b:buildGirl,sk:{kind:'girl',skin:0xffd7b8,bot:0x7a3fbf,hair:0x7a3b1a}},{id:'bear',n:'Bear',b:buildBear,sk:{kind:'bear',skin:0x9a6236,top:0x9a6236,bot:0x9a6236}},{id:'turtle',n:'Turtle',b:buildTurtle,sk:{kind:'turtle',skin:0x6cc24a,top:0x6cc24a,bot:0x6cc24a,shell:0x2f9a55}}];
 let char=null,P=null,charIdx=+(localStorage.getItem('br_char')||0);
 function newPlayer(){return{s:0,x:0,y:0,levelY:0,vy:0,laneIdx:1,onTrain:false,trainLane:1,leap:null,hop:null,duck:0,waiting:false,waitFor:null,waitEv:null,arriveT:0,ei:0,
   jumpSeen:-9,jumpUsed:-9,punchT:-9,punchArm:0,landT:-9,joyT:-9,speed:0,runPh:0,done:0,stars:0,assist:0,fast:0,canRun:false,zoneBlocked:null,level:1,coins:0}}
@@ -1495,7 +1519,7 @@ function buildChar(){
   char.blob=makeBlob();char.blinkOff=Math.random()*3;scene.add(char.root,char.blob);
 }
 
-/* ================= світ: «Чарівна залізниця» ================= */
+/* ================= світ: «Magic Railway» ================= */
 const world=new THREE.Group();scene.add(world);
 const CH=40,BASE=9,ROOF=3.0;
 let laneX=[-2.6,0,2.6],span=8.4,chunks=new Map(),events=[],stars=[],genS=34,patN=0,fx=[],gcache={};
@@ -1588,27 +1612,27 @@ const TH={};          // матеріали перешкод поточної к
 const glow=(c,i=.9,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,emissive:c,emissiveIntensity:i,roughness:.4,metalness:.1},o));
 const alpha=(c,op,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,transparent:true,opacity:op,roughness:.15,metalness:.1,depthWrite:false},o));
 const MAPS=[
- {id:'rail',n:'Чарівна залізниця',ground:0x6cc04a,ballast:0x8e8a84,sleeper:0x6b4425,rail:0xc9d1d8,hill:0x5db24a,fog:[55,230],
+ {id:'rail',n:'Magic Railway',ground:0x6cc04a,ballast:0x8e8a84,sleeper:0x6b4425,rail:0xc9d1d8,hill:0x5db24a,fog:[55,230],
   pals:[{top:0x4aa8ff,bot:0xd2ecff,sun:0xfff1d0,hs:0xffffff,hg:0x77a860,hi:1,si:2.4},{top:0xff7a5c,bot:0xffd7a6,sun:0xffc98a,hs:0xfff0dd,hg:0x8a7a50,hi:.95,si:2.3},{top:0x6b5cff,bot:0xe9d8ff,sun:0xe5d7ff,hs:0xe8e0ff,hg:0x6a6a9a,hi:.9,si:1.9}],
   trains:[[0xe8453c,0xffc21a,0x2f8cff],[0x2fc36b,0xff8a3d,0x8a5cff],[0x00a3a3,0xff5fa2,0xffc21a]],
   th:{fA:0xe8453c,fB:0xffffff,lA:0xffc21a,lB:0x25303d,cA:0xc58a4a,cB:0xa86f35,cont:[0xe8453c,0x2f8cff,0xffa51a,0x2fc36b]},
   clouds:{c:0xffffff,n:14,y:45},part:null,deco:decoRail,far:farRail,ambient:true},
- {id:'jungle',n:'Джунглі',ground:0x2f8a3a,ballast:0x7a5a3a,sleeper:0x5a3a20,rail:0x9a7a4a,hill:0x2a7a38,fog:[40,190],
+ {id:'jungle',n:'Jungle',ground:0x2f8a3a,ballast:0x7a5a3a,sleeper:0x5a3a20,rail:0x9a7a4a,hill:0x2a7a38,fog:[40,190],
   pals:[{top:0x2fb6a0,bot:0xcdf2c0,sun:0xfff2b0,hs:0xf4ffe0,hg:0x2f6a3a,hi:1.0,si:2.2},{top:0xffa14a,bot:0xffe0a0,sun:0xffb870,hs:0xfff0d0,hg:0x4a6a30,hi:.95,si:2.2},{top:0x2a4a9a,bot:0x9ad0c0,sun:0xbfd8ff,hs:0xcfe8ff,hg:0x24503a,hi:.85,si:1.7}],
   trains:[[0x2f9a55,0xc58a4a,0xe8453c],[0xffc21a,0x2fa8a0,0x8a5a2a]],
   th:{fA:0x7a4a28,fB:0x3fa84a,lA:0x8a5a2a,lB:0x2f8a3a,cA:0x8a8f98,cB:0x6a7078,cont:[0x2f9a55,0xc58a4a,0x2fa8a0,0xffc21a]},
   clouds:{c:0xf4fff0,n:8,y:55},part:{c:0xfff59a,size:.22,vy:.15,drift:.6,n:140,glow:true},deco:decoJungle,far:farJungle,ambient:false},
- {id:'ice',n:'Крижане королівство',ground:0xeaf6ff,ballast:0xbfe3f5,sleeper:0x8ac4e6,rail:0xe8fbff,hill:0xdcefff,fog:[40,200],railEm:0x4aa8ff,slEm:0x1a5a90,
+ {id:'ice',n:'Ice Kingdom',ground:0xeaf6ff,ballast:0xbfe3f5,sleeper:0x8ac4e6,rail:0xe8fbff,hill:0xdcefff,fog:[40,200],railEm:0x4aa8ff,slEm:0x1a5a90,
   pals:[{top:0x7ec8ff,bot:0xe8f6ff,sun:0xf2fbff,hs:0xe8f4ff,hg:0xb8d8ee,hi:1.05,si:2.1},{top:0xb48cff,bot:0xffe0f2,sun:0xffe8f8,hs:0xf5e8ff,hg:0xc0a8d8,hi:1.0,si:1.9},{top:0x2a4a9a,bot:0x9ad8ff,sun:0xcfeaff,hs:0xcfe0ff,hg:0x7088b8,hi:.9,si:1.6}],
   trains:[[0x4aa8ff,0xaee8ff,0xffffff],[0x8a7cff,0x5fd0ff,0xffe0f2]],
   th:{fA:0x8adcff,fB:0xffffff,lA:0xbff0ff,lB:0x4a90c8,cA:0x9adcf5,cB:0x7cc4ea,cont:[0x4aa8ff,0x8a7cff,0x5fd0ff,0xffffff]},
   clouds:{c:0xf2f8ff,n:12,y:50},part:{c:0xffffff,size:.16,vy:-2.2,drift:.5,n:420},deco:decoIce,far:farIce,ambient:true},
- {id:'space',n:'Космос',ground:0x0a0f2a,ballast:0x1a2250,sleeper:0xff3fa8,rail:0x4ff0ff,hill:0x0a0f2a,fog:[60,260],balEm:0x0a1a5a,slEm:0xff3fa8,railEm:0x4ff0ff,space:true,
+ {id:'space',n:'Space',ground:0x0a0f2a,ballast:0x1a2250,sleeper:0xff3fa8,rail:0x4ff0ff,hill:0x0a0f2a,fog:[60,260],balEm:0x0a1a5a,slEm:0xff3fa8,railEm:0x4ff0ff,space:true,
   pals:[{top:0x050820,bot:0x1a1e5a,sun:0xbfd0ff,hs:0x8a9aff,hg:0x2a2a6a,hi:.85,si:1.6},{top:0x180828,bot:0x5a1a6a,sun:0xffc0f0,hs:0xd89aff,hg:0x4a2a6a,hi:.85,si:1.5},{top:0x041828,bot:0x0a5a6a,sun:0xc0fff0,hs:0x9affee,hg:0x1a4a5a,hi:.85,si:1.5}],
   trains:[[0x4ff0ff,0xff3fa8,0xffffff],[0xffd23f,0x8a5cff,0x4ff0ff]],
   th:{fA:0xff3fa8,fB:0x4ff0ff,lA:0x8a5cff,lB:0x4ff0ff,cA:0x3a4a7a,cB:0x2a3560,cont:[0x4ff0ff,0xff3fa8,0xffd23f,0x8a5cff],em:true},
   clouds:null,part:{c:0xaaccff,size:.12,vy:0,drift:.3,n:260,glow:true,warp:true},deco:decoSpace,far:farSpace,ambient:true},
- {id:'city',n:'Казкове місто',ground:0x8fd36a,ballast:0xd9c7a8,sleeper:0xb98a5a,rail:0xdfe6ee,hill:0x7fcf62,fog:[55,230],
+ {id:'city',n:'Fairytale City',ground:0x8fd36a,ballast:0xd9c7a8,sleeper:0xb98a5a,rail:0xdfe6ee,hill:0x7fcf62,fog:[55,230],
   pals:[{top:0x5ab8ff,bot:0xffeed8,sun:0xfff0c8,hs:0xfff4ea,hg:0x9ac078,hi:1.05,si:2.4},{top:0xff8ab0,bot:0xffe0c0,sun:0xffc0a0,hs:0xffe8e8,hg:0xb09a78,hi:1.0,si:2.2},{top:0x9a7cff,bot:0xffd8f0,sun:0xffe8ff,hs:0xf0e0ff,hg:0x9a88b8,hi:.95,si:1.9}],
   trains:[[0xff5fa2,0xffc21a,0x4aa8ff],[0x2fc36b,0xff8a3d,0xb45cff]],
   th:{fA:0xff5fa2,fB:0xffffff,lA:0x4aa8ff,lB:0xffc21a,cA:0xffd23f,cB:0x4aa8ff,cont:[0xff5fa2,0x4aa8ff,0xffc21a,0x2fc36b]},
@@ -2000,7 +2024,7 @@ function gemHint(){
   let best=null;
   for(const s of stars){if(s.got||!s.kind||!s.kind.startsWith('gem'))continue;const d=s.s-P.s;if(d<-0.5||d>15||Math.abs(P.x-laneX[s.l])>1.8)continue;if(!best||d<best.d)best={k:s.kind,d}}
   if(!best)return'';
-  return best.k==='gemU'?(S.seated?'Руки вгору — кристал!':'Руки вгору або стрибок — кристал!'):best.k==='gemL'?'Ліва рука вбік — кристал!':'Права рука вбік — кристал!';
+  return best.k==='gemU'?(S.seated?'Arms up — crystal!':'Arms up or jump — crystal!'):best.k==='gemL'?'Left arm out — crystal!':'Right arm out — crystal!';
 }
 function mkStars(s,lane,n,arc){for(let i=0;i<n;i++){const m=new THREE.Mesh(starGeo,starMat);const y=(lane.y||1.2)+(arc?Math.sin(i/(n-1)*Math.PI)*arc:0);m.castShadow=true;m.position.set(laneX[lane.l],y,-(s+i*1.6));world.add(m);stars.push({m,s:s+i*1.6,l:lane.l,y,got:false,t:0})}}
 const rand=rng(Date.now()&0xffff);
@@ -2132,7 +2156,7 @@ function resolve(ev,silent){
   P.waitEv=null;P.waiting=false;
 }
 function onProgress(){
-  const lv=Math.floor(P.done/8)+1;if(lv!==P.level){P.level=lv;if(lv>1){banner('Рівень '+lv+'!');palIdx=(palIdx+1)%PAL.length;P.joyT=now();sfx.ok();confetti(44)}}
+  const lv=Math.floor(P.done/8)+1;if(lv!==P.level){P.level=lv;if(lv>1){banner('Level '+lv+'!');palIdx=(palIdx+1)%PAL.length;P.joyT=now();sfx.ok();confetti(44)}}
 }
 function hitBlock(ev){
   ev.hp--;ev.shake=0.3;P.punchT=now();
@@ -2143,13 +2167,13 @@ function hitBlock(ev){
 function banner(t){const b=$('banner');b.textContent=t;b.classList.add('on');setTimeout(()=>b.classList.remove('on'),1800)}
 function hintFor(ev){
   if(!ev)return'';
-  const dirTo=l=>l>P.laneIdx?'праворуч':'ліворуч';
+  const dirTo=l=>l>P.laneIdx?'right':'left';
   switch(ev.type){
-    case'jump':return S.seated?'Руки вгору!':'Підстрибни!';case'low':return S.seated?'Пригнись!':'Присядь!';
-    case'punch':return'Бий руками вперед!  ×'+ev.hp;
-    case'lane':{let best=-1,bd=9;laneX.forEach((_,l)=>{if(!ev.blocked.has(l)&&Math.abs(l-P.laneIdx)<bd){bd=Math.abs(l-P.laneIdx);best=l}});return ev.blocked.has(P.laneIdx)?'Перейди '+dirTo(best)+'!':'';}
-    case'board':return P.laneIdx!==ev.lane?'Стань до потяга '+dirTo(ev.lane)+'!':(S.seated?'Руки вгору — на вагон!':'Підстрибни на вагон!');
-    case'gap':return S.seated?'Руки вгору — далі!':'Стрибай на наступний вагон!';
+    case'jump':return S.seated?'Arms up!':'Jump!';case'low':return S.seated?'Duck!':'Crouch!';
+    case'punch':return'Punch forward!  ×'+ev.hp;
+    case'lane':{let best=-1,bd=9;laneX.forEach((_,l)=>{if(!ev.blocked.has(l)&&Math.abs(l-P.laneIdx)<bd){bd=Math.abs(l-P.laneIdx);best=l}});return ev.blocked.has(P.laneIdx)?'Move '+dirTo(best)+'!':'';}
+    case'board':return P.laneIdx!==ev.lane?'Step to the train on the '+dirTo(ev.lane)+'!':(S.seated?'Arms up — onto the carriage!':'Jump onto the carriage!');
+    case'gap':return S.seated?'Arms up — keep going!':'Jump to the next carriage!';
   }return'';
 }
 const marker=new THREE.Mesh(new THREE.ConeGeometry(0.5,1.0,4),new THREE.MeshStandardMaterial({color:0x2fe06b,emissive:0x1fa84f,emissiveIntensity:.8}));marker.rotation.x=Math.PI;marker.visible=false;scene.add(marker);
@@ -2208,10 +2232,10 @@ function updateGame(dt,run){
       if(kind==='coin'){totalCoins++;P.coins++;sfx.coin();burst(pos.x,pos.y,pos.z,0xffc21a,5,3.5,.1,.5,4);localStorage.setItem('br_coins',totalCoins);$('coinn').textContent=P.coins}
       else{
         const add=kind==='gift'?5:kind.startsWith('gem')?3:1,prev=totalStars;P.stars+=add;totalStars+=add;
-        if(kind==='gift'){sfx.ok();P.joyT=t;confetti(36);banner('Подарунок! +5 зірочок')}else if(kind.startsWith('gem')){sfx.gem();P.joyT=t;burst(pos.x,pos.y,pos.z,kind==='gemU'?0x4ff0ff:0xff4fd8,14,6,.14,.9,4);banner('Кристал! +3')}else{sfx.star();burst(pos.x,pos.y,pos.z,0xffd23f,6,4,.12,.6,4)}
+        if(kind==='gift'){sfx.ok();P.joyT=t;confetti(36);banner('Gift! +5 stars')}else if(kind.startsWith('gem')){sfx.gem();P.joyT=t;burst(pos.x,pos.y,pos.z,kind==='gemU'?0x4ff0ff:0xff4fd8,14,6,.14,.9,4);banner('Crystal! +3')}else{sfx.star();burst(pos.x,pos.y,pos.z,0xffd23f,6,4,.12,.6,4)}
         localStorage.setItem('br_stars',totalStars);$('starn').textContent=P.stars;
-        SUITS.forEach(su=>{if(su.need>0&&prev<su.need&&totalStars>=su.need){banner('Новий костюм: '+su.n+'!');P.joyT=t;confetti(30);sfx.ok();renderSuits()}});
-        if(kind==='star'&&P.stars%20===0){P.joyT=t;banner('Супер!')}
+        SUITS.forEach(su=>{if(su.need>0&&prev<su.need&&totalStars>=su.need){banner('New suit: '+su.n+'!');P.joyT=t;confetti(30);sfx.ok();renderSuits()}});
+        if(kind==='star'&&P.stars%20===0){P.joyT=t;banner('Super!')}
       }
     }
   }
@@ -2221,11 +2245,11 @@ function updateGame(dt,run){
   if(!hint&&run)hint=gemHint();
   const he=$('hint');he.textContent=hint;he.classList.toggle('on',!!hint);
   marker.visible=false;
-  if(run&&P.waiting&&ev&&(ev.type==='lane'||ev.type==='board')&&hint.startsWith('Перейди')||hint.startsWith('Стань')){
+  if(run&&P.waiting&&ev&&(ev.type==='lane'||ev.type==='board')&&hint.startsWith('Move')||hint.startsWith('Step to')){
     let tl=ev.type==='board'?ev.lane:-1;if(ev.type==='lane')laneX.forEach((_,l)=>{if(!ev.blocked.has(l)&&tl<0)tl=l});
     marker.visible=true;marker.position.set(laneX[tl],2.3+Math.sin(t*6)*0.25,-(P.s+4));
   }
-  $('barf').style.width=((P.done%8)/8*100)+'%';$('lvlt').textContent='Рівень '+(Math.floor(P.done/8)+1);
+  $('barf').style.width=((P.done%8)/8*100)+'%';$('lvlt').textContent='Level '+(Math.floor(P.done/8)+1);
 }
 function waitLogic(ev,t){
   switch(ev.type){
@@ -2328,7 +2352,7 @@ function resetWorld(){
 }
 function beginPlay(){
   audioInit();resetWorld();setState('playing');camera.position.set(P.x,3.7,8.2);
-  banner(S.mode==='free'?'Вільний біг!':'Побігли!');
+  banner(S.mode==='free'?'Free run!':'Let’s run!');
 }
 function startGame(){
   audioInit();
@@ -2340,7 +2364,7 @@ function startTutorial(){
 }
 function tutUI(){
   if(!tut)return;
-  if(tut.step>=TUT.length){$('tutt').textContent='Молодець! Ти все вмієш!';$('tutd').innerHTML='';P.joyT=now();banner('Готово!');setTimeout(()=>{if(state==='tutorial'){tut=null;setState('menu')}},2200);tut.step=99;return}
+  if(tut.step>=TUT.length){$('tutt').textContent='Well done! You can do it all!';$('tutd').innerHTML='';P.joyT=now();banner('Done!');setTimeout(()=>{if(state==='tutorial'){tut=null;setState('menu')}},2200);tut.step=99;return}
   const s=TUT[tut.step];$('tutt').textContent=(S.seated&&s.ts?s.ts:s.t)+(s.n>1?`  (${tut.c}/${s.n})`:'');
   $('tutd').innerHTML=TUT.map((_,i)=>`<i class="${i<tut.step?'on':''}"></i>`).join('');
 }
@@ -2387,7 +2411,7 @@ function applyPanel(){
 }
 const setPanel=v=>{S.panel=v;applyPanel()},setView=v=>{S.view=v;applyView();savePrefs()};
 $('panMini').onclick=()=>setPanel('mini');$('panHide').onclick=()=>setPanel('hide');$('panHide2').onclick=()=>setPanel('hide');
-$('panExpand').onclick=()=>setPanel('full');$('panShow').onclick=()=>setPanel('mini');
+$('panExpand').onclick=()=>{if(MOBILE_MQ.matches&&(state==='playing'||state==='tutorial')){prevState=state;setState('pause')}setPanel('full')};$('panShow').onclick=()=>setPanel('mini');
 $('vVideo').onclick=()=>setView('video');$('vSkin').onclick=()=>setView('skin');$('vOff').onclick=()=>setView('off');
 $('viewCycle').onclick=()=>setView(S.view==='video'?'skin':S.view==='skin'?'off':'video');
 function renderMaps(){
@@ -2407,16 +2431,16 @@ function loadPrefs(){
 }
 function renderSuits(){
   $('suits').innerHTML='';
-  SUITS.forEach((s,i)=>{const b=document.createElement('button'),ok=totalStars>=s.need;b.className='swatch'+(ok?'':' lock')+(i===suit?' sel':'');b.style.background='#'+s.c.toString(16).padStart(6,'0');b.title=ok?s.n:`відкриється за ${s.need} зірочок`;
+  SUITS.forEach((s,i)=>{const b=document.createElement('button'),ok=totalStars>=s.need;b.className='swatch'+(ok?'':' lock')+(i===suit?' sel':'');b.style.background='#'+s.c.toString(16).padStart(6,'0');b.title=ok?s.n:`unlocks at ${s.need} stars`;
     b.onclick=()=>{if(!ok)return;suit=i;localStorage.setItem('br_suit',i);renderSuits();buildChar();queueThumbs(true)};$('suits').appendChild(b)});
-  $('suitnote').textContent=`(зібрано зірочок: ${totalStars})`;
+  $('suitnote').textContent=`(stars collected: ${totalStars})`;
 }
 $('l2').onclick=()=>{S.lanes=2;$('l2').classList.add('sel');$('l3').classList.remove('sel');resetWorld()};
 $('l3').onclick=()=>{S.lanes=3;$('l3').classList.add('sel');$('l2').classList.remove('sel');resetWorld()};
 function setPose(seated){
   S.seated=seated;$('p1').classList.toggle('sel',!seated);$('p2').classList.toggle('sel',seated);
-  $('posenote').textContent=seated?'Сидячи: нахил корпусу — смуга; обидві руки вгору — стрибок; пригнутися — під перешкоду; рука вперед — удар. Потрібні голова, плечі й руки в кадрі.':'Стоячи: нахил або крок убік; підстрибнути; присісти; махнути рукою вперед. Потрібне тіло до колін.';
-  if(tr.on){tr.calibrated=false;tr.base=null;resetDetect();setStatus('Змінено позу — потрібне калібрування','y')}
+  $('posenote').textContent=seated?'Seated: lean your torso to change lane; both arms up to jump; bend forward to duck; push an arm forward to punch. Head, shoulders and arms must be in view.':'Standing: lean or step sideways; jump; crouch; swing an arm forward. Your body must be visible down to the knees.';
+  if(tr.on){tr.calibrated=false;tr.base=null;resetDetect();setStatus('Pose changed — calibration needed','y')}
 }
 $('p1').onclick=()=>setPose(false);$('p2').onclick=()=>setPose(true);setPose(false);
 $('m1').onclick=()=>{S.mode='nolose';$('m1').classList.add('sel');$('m2').classList.remove('sel')};
@@ -2489,12 +2513,12 @@ function ctlUI(){
   document.body.classList.toggle('ctl-joy',S.ctrl==='joy');
   $('jpunch').style.display=(S.ctrl!=='body'&&p)?'block':'none';$('jpunch').style.pointerEvents=S.ctrl==='joy'?'auto':'none';
   const bot=S.ctrl==='bot'&&p;
-  if(bot){joyEl.style.display='block';joyEl.style.left='130px';joyEl.style.top=($('stage').clientHeight-150)+'px';$('jtag').textContent='БОТ'}
+  if(bot){joyEl.style.display='block';joyEl.style.left='130px';joyEl.style.top=($('stage').clientHeight-150)+'px';$('jtag').textContent='BOT'}
   else if(S.ctrl!=='joy'||!p){joyEl.style.display='none';$('jtag').textContent=''}
-  const hm=$('jhint');hm.style.display=(S.ctrl==='joy'&&p&&!tut)?'block':'none';hm.textContent='Торкнись і тягни: ←→ смуга · ↑ стрибок · ↓ присісти · торкання або УДАР — удар · потягни далі — руки';
+  const hm=$('jhint');hm.style.display=(S.ctrl==='joy'&&p&&!tut)?'block':'none';hm.textContent='Touch and drag: ←→ lane · ↑ jump · ↓ crouch · tap or PUNCH = punch · drag further = arms';
   if(!p){joyDrive(0,0);BOT.kx=BOT.ky=0}
 }
-const CTLN={body:'Керуй тілом через камеру (або клавіатурою для тесту).',joy:'Торкнись будь-де екрана — з’явиться джойстик. Вліво/вправо — смуга, вгору — стрибок, вниз — присісти, швидке торкання — удар. Тягни до краю — рука вбік/вгору для кристалів.',bot:'Бот сам проходить рівень і збирає все. Джойстик ліворуч унизу показує, як він керується.'};
+const CTLN={body:'Control the game with your body via camera (or the keyboard for testing).',joy:'Touch anywhere on the screen to get a joystick. Left/right = lane, up = jump, down = crouch, quick tap = punch. Drag to the edge = arm out/up for crystals.',bot:'The bot plays the level and collects everything by itself. The joystick at the bottom left shows how it steers.'};
 function setCtrl(c){
   S.ctrl=c;for(const[k,id]of[['body','c1'],['joy','c2'],['bot','c3']])$(id).classList.toggle('sel',c===k);
   $('ctlnote').textContent=CTLN[c];ctlUI();
