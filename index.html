@@ -968,22 +968,28 @@ function updateArms(lm,t,a){
   const k=clamp(a,0.3,1),vis=i=>(lm[i].visibility??0)>0.45;
   tr.hu={L:vis(15)&&vis(0)&&lm[15].y<lm[0].y-0.03,R:vis(16)&&vis(0)&&lm[16].y<lm[0].y-0.03,t};
   for(const[key,sh,wr,out]of[['L',11,15,1],['R',12,16,-1]]){
-    const A=lm[sh],W=lm[wr];if((W.visibility??0)<0.35||(A.visibility??0)<0.4)continue;
+    const A=lm[sh],W=lm[wr];if((W.visibility??0)<0.5||(A.visibility??0)<0.5)continue;
     let x=(W.x-A.x)*out,y=-(W.y-A.y),z=(A.z-W.z)*0.9;const n=Math.hypot(x,y,z);if(n<0.02)continue;
     x/=n;y/=n;z/=n;const p=ARM[key];
     const sw=Math.max(0.06,Math.abs(lm[11].x-lm[12].x)),sx=(W.x-A.x)*out/sw,sy=-(W.y-A.y)/sw;
     ARM[key]=p&&t-p.t<0.5?{x:p.x+(x-p.x)*k,y:p.y+(y-p.y)*k,z:p.z+(z-p.z)*k,sx:p.sx+(sx-p.sx)*k,sy:p.sy+(sy-p.sy)*k,t}:{x,y,z,sx,sy,t};ARM.t=t;
   }
 }
+const headTh=()=>0.3/Math.max(0.6,S.sens);
 function updateHead(lm,t,a){
   const vis=i=>(lm[i].visibility??0);let y=null;
   if(vis(0)>0.5){
-    const e7=vis(7),e8=vis(8);
-    if(e7>0.3&&e8>0.3){const d=Math.max(0.03,Math.abs(lm[7].x-lm[8].x));y=(lm[0].x-(lm[7].x+lm[8].x)/2)/d}
-    else if(e7<0.25&&e8>0.45)y=0.8;else if(e8<0.25&&e7>0.45)y=-0.8;
+    const e7=vis(7),e8=vis(8),sw=(vis(11)>0.4&&vis(12)>0.4)?Math.abs(lm[11].x-lm[12].x):0.3;
+    if(e7>0.4&&e8>0.4){const d=Math.max(0.03,Math.abs(lm[7].x-lm[8].x),0.22*sw);y=(lm[0].x-(lm[7].x+lm[8].x)/2)/d}
+    else if(e7<0.2&&e8>0.55)y=0.8;else if(e8<0.2&&e7>0.55)y=-0.8;
   }
-  if(y==null)return;const k=clamp(a,0.35,1),p=tr.head;
-  tr.head={y:p&&t-p.t<0.5?p.y+(y-p.y)*k:y,t};
+  if(y==null)return;y=clamp(y,-1.3,1.3);
+  const k=clamp(a,0.35,1),p=tr.head,ys=p&&t-p.t<0.5?p.y+(y-p.y)*k:y;
+  tr.head={y:ys,t};
+  const th=headTh(),pd=tr.headDir||0;let dir=pd;
+  if(!pd){if(ys>th)dir=1;else if(ys<-th)dir=-1}
+  else if((pd>0&&ys<th*0.6)||(pd<0&&ys>-th*0.6))dir=0;
+  if(dir!==pd){tr.headDir=dir;tr.headSince=t}
 }
 /* що саме "тягне" гравець зараз: руки вгору / ліва вбік / права вбік (камера або клавіші R, Q, E) */
 function reach(t){
@@ -991,7 +997,7 @@ function reach(t){
   if(input.kbdUp||input.joyUp)r.handUp=true;if(input.kbdL||input.joyL)r.L=true;if(input.kbdR||input.joyR)r.R=true;
   if(tr.on&&S.ctrl==='body'){
     if(tr.hu&&t-tr.hu.t<0.35&&(tr.hu.L||tr.hu.R))r.handUp=true;
-    if(tr.head&&t-tr.head.t<0.35){const th=0.3/Math.max(0.6,S.sens);if(tr.head.y>th)r.L=true;else if(tr.head.y<-th)r.R=true}
+    if(tr.head&&t-tr.head.t<0.35&&tr.headDir&&t-tr.headSince>0.1){if(tr.headDir>0)r.L=true;else r.R=true}
     const L=ARM.L,R=ARM.R;
     if(L&&t-L.t<0.35&&((L.x>0.5&&Math.abs(L.y)<0.8)||(L.sx>0.95&&Math.abs(L.sy)<L.sx*1.1)))r.L=true;
     if(R&&t-R.t<0.35&&((R.x>0.5&&Math.abs(R.y)<0.8)||(R.sx>0.95&&Math.abs(R.sy)<R.sx*1.1)))r.R=true;
@@ -1153,17 +1159,23 @@ function drawSkin(c,lm,w,h){
     if(isFur){const mx=(A[0]+B[0]+C[0]+D[0])/4,my=(A[1]+B[1]+C[1]+D[1])/4;c.fillStyle=sk.kind==='turtle'?'#f4e3a1':'#e8c38e';c.beginPath();c.ellipse(mx,my,sw*.3,sw*.5,0,0,7);c.fill();
       c.strokeStyle=hx(SUITS[suit].c);c.lineWidth=sw*.16;c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke()}
   }
-  /* 4) голова */
+  /* 4) голова (з поворотом) */
   if(ok(0)){
-    const n=pt(0),R=sw*.5,x=n[0],y=n[1]-R*.12;
-    if(sk.kind==='bear'){for(const sx of[-1,1]){disc(x+sx*R*.85,y-R*.8,R*.38,skin);circ(x+sx*R*.85,y-R*.8,R*.2,'#e8c38e')}}
-    if(sk.kind==='girl'){for(const sx of[-1,1]){disc(x+sx*R*1.0,y+R*.2,R*.36,hair);circ(x+sx*R*1.0,y-R*.15,R*.2,'#ff4f9a')}}
+    const hy=(tr.head&&now()-tr.head.t<0.5)?tr.head.y:0,ang=clamp(hy*0.95,-1.15,1.15),cs=Math.cos(ang),sn=Math.sin(ang);
+    const earsOK=ok(7)&&ok(8),n=pt(0),R=sw*.5,x=earsOK?(lm[7].x+lm[8].x)/2*w:n[0],y=n[1]-R*.12;
+    const fx=sn*R*.62; /* зсув рис обличчя в бік повороту */
+    if(sk.kind==='bear'){for(const sx of[-1,1]){const k=sx*cs;disc(x+k*R*.85,y-R*.8,R*.38,skin);circ(x+k*R*.85,y-R*.8,R*.2,'#e8c38e')}}
+    if(sk.kind==='girl'){for(const sx of[-1,1]){disc(x+sx*cs*R*1.0,y+R*.2,R*.36,hair);circ(x+sx*cs*R*1.0,y-R*.15,R*.2,'#ff4f9a')}}
     disc(x,y,R,skin);
-    if(sk.kind==='boy'||sk.kind==='girl'){c.fillStyle=hair;c.beginPath();c.arc(x,y,R*1.03,Math.PI*1.05,Math.PI*1.95);c.lineTo(x,y-R*.2);c.closePath();c.fill()}
-    if(sk.kind==='bear'){c.fillStyle='#e8c38e';c.beginPath();c.ellipse(x,y+R*.4,R*.5,R*.38,0,0,7);c.fill();circ(x,y+R*.25,R*.14,'#2a1a10')}
+    if(sk.kind==='boy'||sk.kind==='girl'){c.fillStyle=hair;c.beginPath();c.arc(x,y,R*1.03,Math.PI*1.05,Math.PI*1.95);c.lineTo(x,y-R*.2);c.closePath();c.fill();
+      if(Math.abs(sn)>.3){c.beginPath();c.ellipse(x-sn*R*.72,y+R*.05,R*.28,R*.55,0,0,7);c.fill()}}
+    if(sk.kind==='bear'){c.fillStyle='#e8c38e';c.beginPath();c.ellipse(x+fx,y+R*.4,R*.5*cs+R*.1,R*.38,0,0,7);c.fill();circ(x+fx*1.15,y+R*.25,R*.14,'#2a1a10')}
     if(sk.kind==='turtle'){c.strokeStyle=hx(SUITS[suit].c);c.lineWidth=R*.22;c.beginPath();c.arc(x,y,R*.9,Math.PI*1.1,Math.PI*1.9);c.stroke()}
-    for(const sx of[-1,1]){circ(x+sx*R*.36,y-R*.05,R*.17,'#ffffff');circ(x+sx*R*.36,y-R*.03,R*.1,'#111');circ(x+sx*R*.33,y-R*.08,R*.04,'#fff')}
-    c.strokeStyle='#222';c.lineWidth=Math.max(2,R*.07);c.beginPath();c.arc(x,y+R*.28,R*.22,0.15*Math.PI,0.85*Math.PI);c.stroke();
+    for(const sx of[-1,1]){const ex=x+fx+sx*R*.36*cs,es=Math.max(.35,cs);
+      c.save();c.translate(ex,y-R*.05);c.scale(es,1);circ(0,0,R*.17,'#ffffff');circ(sn*R*.04,R*.02,R*.1,'#111');circ(-R*.03,-R*.03,R*.04,'#fff');c.restore()}
+    c.strokeStyle='#222';c.lineWidth=Math.max(2,R*.07);c.beginPath();c.ellipse(x+fx*1.1,y+R*.28,R*.22*Math.max(.45,cs),R*.22,0,0.15*Math.PI,0.85*Math.PI);c.stroke();
+    if(!(sk.kind==='bear')){c.fillStyle='rgba(0,0,0,.18)';c.beginPath();c.ellipse(x+fx*1.25,y+R*.12,R*.07,R*.1,0,0,7);c.fill()}
+    if(tr.headDir){c.fillStyle='#ffd23f';c.strokeStyle=OL;c.lineWidth=OLW*.5;const ax=x+(tr.headDir>0?1:-1)*R*1.75,ay=y;c.beginPath();c.moveTo(ax+(tr.headDir>0?R*.35:-R*.35),ay);c.lineTo(ax-(tr.headDir>0?R*.2:-R*.2),ay-R*.3);c.lineTo(ax-(tr.headDir>0?R*.2:-R*.2),ay+R*.3);c.closePath();c.fill();c.stroke()}
   }
   /* 5) руки — найвищий шар, щоб було видно перед тулубом і обличчям */
   limbs([[11,13,sw*.26,top],[12,14,sw*.26,top]]);
@@ -1180,6 +1192,25 @@ function drawSkeleton(lm){
   c.lineWidth=4;c.lineCap='round';
   for(const[a,b]of BONES){const A=lm[a],B=lm[b];c.strokeStyle=colorFor((A.visibility??0)<(B.visibility??0)?A:B);c.beginPath();c.moveTo(A.x*cv.width,A.y*cv.height);c.lineTo(B.x*cv.width,B.y*cv.height);c.stroke()}
   for(const i of JOINTS){const p=lm[i];c.fillStyle=colorFor(p);c.beginPath();c.arc(p.x*cv.width,p.y*cv.height,i===0?9:6,0,6.3);c.fill()}
+  drawHeadOverlay(c,lm,cv.width,cv.height);
+}
+function drawHeadOverlay(c,lm,w,h){
+  const v=i=>(lm[i].visibility??0)>0.4,P_=i=>[lm[i].x*w,lm[i].y*h];
+  if(!v(0))return;
+  c.lineWidth=2.5;
+  for(const[a,b]of[[7,2],[2,0],[0,5],[5,8],[9,10]])if(v(a)&&v(b)){const A=P_(a),B=P_(b);c.strokeStyle='#8fd3ff';c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke()}
+  for(const i of[1,2,3,4,5,6,7,8,9,10,0])if(v(i)){const p=P_(i);c.fillStyle=i===0?'#ffd23f':'#8fd3ff';c.beginPath();c.arc(p[0],p[1],i===0?5:3.5,0,7);c.fill()}
+  if(v(7)&&v(8)){const A=P_(7),B=P_(8),cx=(A[0]+B[0])/2,cy=(A[1]+B[1])/2,n=P_(0);
+    c.strokeStyle='#ffd23f';c.lineWidth=3;c.beginPath();c.moveTo(cx,cy);c.lineTo(n[0],n[1]);c.stroke();
+    c.strokeStyle='rgba(255,255,255,.6)';c.lineWidth=1.5;c.beginPath();c.moveTo(cx,cy-40);c.lineTo(cx,cy+40);c.stroke()}
+  headIndicator(c,w,h,lm[0].x*w,lm[0].y*h);
+}
+function headIndicator(c,w,h,x,y){
+  const d=tr.headDir||0,yy=(tr.head&&now()-tr.head.t<0.5)?tr.head.y:0,bw=Math.min(w*.5,170),bx=w/2-bw/2,by=h-18;
+  c.fillStyle='rgba(0,0,0,.45)';c.fillRect(bx,by,bw,9);
+  const th=headTh(),tx=bx+bw/2;c.fillStyle='rgba(255,255,255,.5)';c.fillRect(bx+bw/2+th/1.3*bw/2-1,by-2,2,13);c.fillRect(bx+bw/2-th/1.3*bw/2-1,by-2,2,13);
+  const px=tx+clamp(yy/1.3,-1,1)*bw/2;c.fillStyle=d?'#ffd23f':'#8fd3ff';c.beginPath();c.arc(px,by+4.5,7,0,7);c.fill();
+  if(d){c.save();c.translate(w/2,by-12);c.scale(-1,1);c.fillStyle='#ffd23f';c.font='bold '+Math.round(h*.06)+'px sans-serif';c.textAlign='center';c.fillText(d>0?'◄ HEAD':'HEAD ►',0,0);c.restore()}
 }
 function trackerUpdate(){
   if(!tr.on||!tr.pl||tr.video.readyState<2||tr.video.currentTime===tr.lastVT)return;
@@ -2281,7 +2312,7 @@ function mirrorArms(c,dt,t,swL,swR){
     _v.set(sgn*a.x,a.y,-a.z);if(_v.lengthSq()<1e-4)continue;_v.normalize();_q.setFromUnitVectors(_dn,_v);
     const hang=clamp((-a.y-0.5)/0.4,0,1);
     if(hang>0){_q2.setFromAxisAngle(_ax,sw*hang);_q.premultiply(_q2)}
-    arm.quaternion.slerp(_q,1-Math.exp(-dt*22));
+    arm.quaternion.slerp(_q,1-Math.exp(-dt*(a.hold?10:16)));
   }
 }
 function animChar(dt,t){
@@ -2299,21 +2330,21 @@ function animChar(dt,t){
   }
   const mir=mirrorOK(t)&&!joy;
   if(punch&&!duck&&!mir){const u=1-(t-P.punchT)/0.28,arm=P.punchArm?'armR':'armL';c[arm].rotation.x=1.55*Math.sin(u*Math.PI*0.9+0.2);const other=P.punchArm?'armL':'armR';c[other].rotation.x=aL*0.5-0.5}
-  if(joy){const u=(t-P.joyT);aL=aR=2.9+Math.sin(u*14)*0.3;by=Math.abs(Math.sin(u*8))*0.25;c.root.rotation.y+=0}
+  if(joy){const u=(t-P.joyT);by=Math.abs(Math.sin(u*8))*0.18}
   const lerpA=Math.min(1,dt*20);
   c.legL.rotation.x=lerp(c.legL.rotation.x,lL,lerpA);c.legR.rotation.x=lerp(c.legR.rotation.x,lR,lerpA);
   if(mir)mirrorArms(c,dt,t,aL,aR);
   else{
     if(!punch||duck){c.armL.rotation.x=lerp(c.armL.rotation.x,aL,lerpA);c.armR.rotation.x=lerp(c.armR.rotation.x,aR,lerpA)}
-    c.armL.rotation.z=lerp(c.armL.rotation.z,air||joy?0.35:0.08,lerpA);c.armR.rotation.z=lerp(c.armR.rotation.z,air||joy?-0.35:-0.08,lerpA);
+    c.armL.rotation.z=lerp(c.armL.rotation.z,air?0.35:0.08,lerpA);c.armR.rotation.z=lerp(c.armR.rotation.z,air?-0.35:-0.08,lerpA);
     if(input.kbdUp){c.armL.rotation.x=c.armR.rotation.x=3.0}
     if(input.kbdL){c.armL.rotation.x=0;c.armL.rotation.z=-1.55}
     if(input.kbdR){c.armR.rotation.x=0;c.armR.rotation.z=1.55}
   }
   c.body.position.y=lerp(c.body.position.y,by,lerpA);c.body.scale.y=lerp(c.body.scale.y,sy,lerpA);c.torso.rotation.x=lerp(c.torso.rotation.x,tilt,lerpA);
-  c.head.rotation.y=Math.sin(t*1.7)*(sp<0.05?0.35:0.05);
+  {const hv=mirrorOK(t)&&tr.head&&t-tr.head.t<0.4&&S.ctrl==='body';const ty=hv?clamp(tr.head.y*1.1,-0.9,0.9):Math.sin(t*1.7)*(sp<0.05?0.35:0.05);c.head.rotation.y=lerp(c.head.rotation.y,ty,Math.min(1,dt*12))}
   const lean=clamp((laneX[P.laneIdx]-P.x)*0.3,-0.5,0.5);
-  c.root.rotation.y=lerp(c.root.rotation.y,joy?-(t-P.joyT)*9:-lean,Math.min(1,dt*10));
+  c.root.rotation.y=lerp(c.root.rotation.y,-lean,Math.min(1,dt*10));
   c.root.position.set(P.x,P.y,-P.s);
   const bk=c.eyes&&c.eyes.userData&&c.eyes.userData.blink;if(bk)bk.scale.y=((t+c.blinkOff)%3.4)<0.13?0.12:1;
   if(c.blob){const hh=clamp((P.y-P.levelY)/3,0,.7);c.blob.position.set(P.x,P.levelY+(P.levelY>0?0.17:0.03),-P.s);c.blob.scale.setScalar(1.7*(1-hh));c.blob.material.opacity=1-hh*.8}
