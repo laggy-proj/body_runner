@@ -462,7 +462,7 @@ layout(location=3) in vec2 uv;
 layout(location=4) in vec4 iM0;layout(location=5) in vec4 iM1;layout(location=6) in vec4 iM2;layout(location=7) in vec4 iM3;
 layout(location=8) in vec3 iColor;
 #endif
-uniform mat4 uModel;uniform mat4 uVP;uniform mat3 uNormalMat;uniform mat4 uLightVP;uniform float uNormalBias;
+uniform mat4 uModel;uniform mat4 uVP;uniform mat3 uNormalMat;uniform mat4 uLightVP;uniform float uNormalBias;uniform vec3 uBend;
 out vec3 vWorld;out vec3 vNormal;out vec3 vCol;out vec2 vUv;out vec4 vShadow;out float vDepth;
 void main(){
   vec4 lp=vec4(position,1.0);vec3 ln=normal;
@@ -480,7 +480,8 @@ void main(){
 #endif
   vCol=c;vUv=uv;
   vShadow=uLightVP*vec4(wp.xyz+normalize(vNormal)*uNormalBias,1.0);
-  gl_Position=uVP*wp;vDepth=gl_Position.w;
+  vec4 wq=wp;float bd=clamp(uBend.z-wp.z-8.0,0.0,120.0);wq.x+=uBend.x*bd*bd;wq.y+=uBend.y*bd*bd;
+  gl_Position=uVP*wq;vDepth=gl_Position.w;
 }`;
 const FS_STD=`#version 300 es
 precision highp float;precision highp sampler2D;
@@ -773,7 +774,7 @@ class WebGLRenderer{
     pr=this._prog('S'+defs.join(','),VS_STD,FS_STD,defs);
     if(this._cur!==pr||pr.frame!==this._frame){gl.useProgram(pr.p);this._cur=pr;
       if(pr.frame!==this._frame){pr.frame=this._frame;const L=this._loc.bind(this,pr);
-        gl.uniformMatrix4fv(L('uVP'),false,this._vp.e);gl.uniform3f(L('uCamPos'),ctx.campos[12],ctx.campos[13],ctx.campos[14]);
+        gl.uniformMatrix4fv(L('uVP'),false,this._vp.e);gl.uniform3f(L('uCamPos'),ctx.campos[12],ctx.campos[13],ctx.campos[14]);gl.uniform3f(L('uBend'),this.bend?this.bend.x:0,this.bend?this.bend.y:0,ctx.campos[14]);
         const hs=hemi?hemi.color:{r:1,g:1,b:1},hg=hemi?hemi.groundColor:{r:.3,g:.3,b:.3};
         gl.uniform3f(L('uHemiSky'),hs.r,hs.g,hs.b);gl.uniform3f(L('uHemiGround'),hg.r,hg.g,hg.b);gl.uniform1f(L('uHemiI'),hemi?hemi.intensity:0);
         if(sun){const se=sun.matrixWorld.e,te=sun.target.matrixWorld.e;let dx=se[12]-te[12],dy=se[13]-te[13],dz=se[14]-te[14];const l=Math.hypot(dx,dy,dz)||1;
@@ -912,7 +913,7 @@ function noise(dur,vol=.3,freq=1200,delay=0){
   const g=c.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(AU.sfx);s.start(c.currentTime+delay);
 }
 const sfx={
-  jump:()=>tone(300,720,.18,'triangle',.25),land:()=>tone(170,70,.12,'sine',.3),
+  jump:()=>tone(300,720,.18,'triangle',.25),hurt:()=>{tone(220,70,.28,'sawtooth',.28);tone(140,60,.3,'square',.15,.05)},land:()=>tone(170,70,.12,'sine',.3),
   gem:()=>[1047,1319,1568,2093].forEach((f,i)=>tone(f,f,.18,'triangle',.2,i*.06)),
   coin:()=>{tone(988,988,.07,'square',.12);tone(1319,1319,.16,'square',.12,.06)},
   star:()=>{tone(880,1320,.12,'sine',.2);tone(1320,1760,.14,'sine',.16,.07)},
@@ -985,7 +986,13 @@ function updateHead(lm,t,a){
   }
   if(y==null)return;y=clamp(y,-1.3,1.3);
   const k=clamp(a,0.35,1),p=tr.head,ys=p&&t-p.t<0.5?p.y+(y-p.y)*k:y;
-  tr.head={y:ys,t};
+  let roll=0,pitch=0;
+  if(vis(7)>0.4&&vis(8)>0.4){const dx=lm[7].x-lm[8].x,dy=lm[7].y-lm[8].y;roll=clamp(Math.atan2(dy*(dx<0?-1:1),Math.abs(dx)),-0.7,0.7);
+    const d2=Math.max(0.03,Math.abs(dx));const pv=(lm[0].y-(lm[7].y+lm[8].y)/2)/d2;
+    tr.pb=tr.pb==null?pv:tr.pb+(pv-tr.pb)*0.02;pitch=clamp(pv-tr.pb,-1,1)}
+  const pr0=tr.head&&t-tr.head.t<0.5?tr.head:null;
+  roll=pr0?pr0.roll+(roll-pr0.roll)*k:roll;pitch=pr0?pr0.pitch+(pitch-pr0.pitch)*k:pitch;
+  tr.head={y:ys,t,roll,pitch};
   const th=headTh(),pd=tr.headDir||0;let dir=pd;
   if(!pd){if(ys>th)dir=1;else if(ys<-th)dir=-1}
   else if((pd>0&&ys<th*0.6)||(pd<0&&ys>-th*0.6))dir=0;
@@ -1161,9 +1168,10 @@ function drawSkin(c,lm,w,h){
   }
   /* 4) голова (з поворотом) */
   if(ok(0)){
-    const hy=(tr.head&&now()-tr.head.t<0.5)?tr.head.y:0,ang=clamp(hy*0.95,-1.15,1.15),cs=Math.cos(ang),sn=Math.sin(ang);
+    const hy=(tr.head&&now()-tr.head.t<0.5)?tr.head.y:0,ang=clamp(hy*2.4,-1.45,1.45),cs=Math.cos(ang),sn=Math.sin(ang),hr=(tr.head&&now()-tr.head.t<0.5)?(tr.head.roll||0):0,hp=(tr.head&&now()-tr.head.t<0.5)?(tr.head.pitch||0):0;
     const earsOK=ok(7)&&ok(8),n=pt(0),R=sw*.5,x=earsOK?(lm[7].x+lm[8].x)/2*w:n[0],y=n[1]-R*.12;
     const fx=sn*R*.62; /* зсув рис обличчя в бік повороту */
+    c.save();c.translate(x,y);c.rotate(hr);c.translate(-x,-y);
     if(sk.kind==='bear'){for(const sx of[-1,1]){const k=sx*cs;disc(x+k*R*.85,y-R*.8,R*.38,skin);circ(x+k*R*.85,y-R*.8,R*.2,'#e8c38e')}}
     if(sk.kind==='girl'){for(const sx of[-1,1]){disc(x+sx*cs*R*1.0,y+R*.2,R*.36,hair);circ(x+sx*cs*R*1.0,y-R*.15,R*.2,'#ff4f9a')}}
     disc(x,y,R,skin);
@@ -1172,10 +1180,11 @@ function drawSkin(c,lm,w,h){
     if(sk.kind==='bear'){c.fillStyle='#e8c38e';c.beginPath();c.ellipse(x+fx,y+R*.4,R*.5*cs+R*.1,R*.38,0,0,7);c.fill();circ(x+fx*1.15,y+R*.25,R*.14,'#2a1a10')}
     if(sk.kind==='turtle'){c.strokeStyle=hx(SUITS[suit].c);c.lineWidth=R*.22;c.beginPath();c.arc(x,y,R*.9,Math.PI*1.1,Math.PI*1.9);c.stroke()}
     for(const sx of[-1,1]){const ex=x+fx+sx*R*.36*cs,es=Math.max(.35,cs);
-      c.save();c.translate(ex,y-R*.05);c.scale(es,1);circ(0,0,R*.17,'#ffffff');circ(sn*R*.04,R*.02,R*.1,'#111');circ(-R*.03,-R*.03,R*.04,'#fff');c.restore()}
+      c.save();c.translate(ex,y-R*.05+hp*R*.25);c.scale(es,1);circ(0,0,R*.17,'#ffffff');circ(sn*R*.04,R*.02,R*.1,'#111');circ(-R*.03,-R*.03,R*.04,'#fff');c.restore()}
     c.strokeStyle='#222';c.lineWidth=Math.max(2,R*.07);c.beginPath();c.ellipse(x+fx*1.1,y+R*.28,R*.22*Math.max(.45,cs),R*.22,0,0.15*Math.PI,0.85*Math.PI);c.stroke();
     if(!(sk.kind==='bear')){c.fillStyle='rgba(0,0,0,.18)';c.beginPath();c.ellipse(x+fx*1.25,y+R*.12,R*.07,R*.1,0,0,7);c.fill()}
     if(tr.headDir){c.fillStyle='#ffd23f';c.strokeStyle=OL;c.lineWidth=OLW*.5;const ax=x+(tr.headDir>0?1:-1)*R*1.75,ay=y;c.beginPath();c.moveTo(ax+(tr.headDir>0?R*.35:-R*.35),ay);c.lineTo(ax-(tr.headDir>0?R*.2:-R*.2),ay-R*.3);c.lineTo(ax-(tr.headDir>0?R*.2:-R*.2),ay+R*.3);c.closePath();c.fill();c.stroke()}
+    c.restore();
   }
   /* 5) руки — найвищий шар, щоб було видно перед тулубом і обличчям */
   limbs([[11,13,sw*.26,top],[12,14,sw*.26,top]]);
@@ -1516,7 +1525,7 @@ function buildTurtle(c){
 const CHARS=[{id:'boy',n:'Boy',b:buildBoy,sk:{kind:'boy',skin:0xffd0a6,bot:0x3b4f8a,hair:0x5a3418}},{id:'girl',n:'Girl',b:buildGirl,sk:{kind:'girl',skin:0xffd7b8,bot:0x7a3fbf,hair:0x7a3b1a}},{id:'bear',n:'Bear',b:buildBear,sk:{kind:'bear',skin:0x9a6236,top:0x9a6236,bot:0x9a6236}},{id:'turtle',n:'Turtle',b:buildTurtle,sk:{kind:'turtle',skin:0x6cc24a,top:0x6cc24a,bot:0x6cc24a,shell:0x2f9a55}}];
 let char=null,P=null,charIdx=+(localStorage.getItem('br_char')||0);
 function newPlayer(){return{s:0,x:0,y:0,levelY:0,vy:0,laneIdx:1,onTrain:false,trainLane:1,leap:null,hop:null,duck:0,waiting:false,waitFor:null,waitEv:null,arriveT:0,ei:0,
-  jumpSeen:-9,jumpUsed:-9,punchT:-9,punchArm:0,landT:-9,joyT:-9,speed:0,runPh:0,done:0,stars:0,assist:0,fast:0,canRun:false,zoneBlocked:null,level:1,coins:0}}
+  jumpSeen:-9,jumpUsed:-9,punchT:-9,punchArm:0,landT:-9,joyT:-9,speed:0,runPh:0,done:0,stars:0,assist:0,fast:0,canRun:false,zoneBlocked:null,level:1,coins:0,hurtT:-9,dj:false,reachT:-9,reachDir:0,hopT:0}}
 P=newPlayer();
 
 /* ===== покращення вигляду персонажів: деталі, контур, відблиски, тінь ===== */
@@ -1564,7 +1573,7 @@ function buildChar(){
 /* ================= світ: «Magic Railway» ================= */
 const world=new THREE.Group();scene.add(world);
 const CH=40,BASE=9,ROOF=3.0;
-let laneX=[-2.6,0,2.6],span=8.4,chunks=new Map(),events=[],stars=[],genS=34,patN=0,fx=[],gcache={};
+let laneX=[-2.6,0,2.6],span=8.4,chunks=new Map(),events=[],stars=[],foes=[],foeS=80,genS=34,patN=0,fx=[],gcache={};
 const starGeo=(()=>{const sh=new THREE.Shape();for(let i=0;i<10;i++){const r=i%2?0.22:0.5,a=i/10*Math.PI*2+Math.PI/2;i?sh.lineTo(Math.cos(a)*r,Math.sin(a)*r):sh.moveTo(Math.cos(a)*r,Math.sin(a)*r)}sh.closePath();return new THREE.ExtrudeGeometry(sh,{depth:0.14,bevelEnabled:true,bevelSize:0.05,bevelThickness:0.05,bevelSegments:2}).translate(0,0,-0.07)})();
 const starMat=new THREE.MeshStandardMaterial({color:0xffd23f,emissive:0xffa800,emissiveIntensity:.55,roughness:.3,metalness:.4});
 const sleeperG=new THREE.BoxGeometry(2.0,0.1,0.28),railG=new THREE.BoxGeometry(0.11,0.15,CH);
@@ -2167,10 +2176,11 @@ function addPattern(){
    if(r0<0.55)mkCoins(zS-30,rl,nc);else if(r0<0.67)mkGift(zS-24,rl);else if(r0<0.85)mkGems('gemU',zS-30);else mkGems(rand()<.5?'gemL':'gemR',zS-30)}
   genS=end+pad+8;
 }
-function genAhead(){while(genS<P.s+170)addPattern()}
-function clearEvents(){for(const e of events)if(e.g)world.remove(e.g);events=[];for(const s of stars)world.remove(s.m);stars=[];for(const f of fx)world.remove(f.m);fx=[]}
+function genAhead(){while(genS<P.s+170)addPattern();while(foeS<P.s+170){if(state!=='tutorial'&&foeS>70)addFoe(foeS);foeS+=60+Math.random()*50}}
+function clearEvents(){for(const e of foes)world.remove(e.g);foes=[];for(const e of events)if(e.g)world.remove(e.g);events=[];for(const s of stars)world.remove(s.m);stars=[];for(const f of fx)world.remove(f.m);fx=[]}
 function cleanup(){
   while(events.length&&events[0].done&&events[0].s+(events[0].len||0)<P.s-30){const e=events.shift();if(e.g)world.remove(e.g);P.ei=Math.max(0,P.ei-1)}
+  for(let i=foes.length-1;i>=0;i--)if(foes[i].s<P.s-25){world.remove(foes[i].g);foes.splice(i,1)}
   for(let i=stars.length-1;i>=0;i--){const s=stars[i];if(s.s<P.s-25||(s.got&&s.t>0.5)){world.remove(s.m);stars.splice(i,1)}}
 }
 
@@ -2219,11 +2229,58 @@ function hintFor(ev){
   }return'';
 }
 const marker=new THREE.Mesh(new THREE.ConeGeometry(0.5,1.0,4),new THREE.MeshStandardMaterial({color:0x2fe06b,emissive:0x1fa84f,emissiveIntensity:.8}));marker.rotation.x=Math.PI;marker.visible=false;scene.add(marker);
+
+/* ===== злі противники по боках колій ===== */
+const FOE_COL=[0x8e44ad,0xc0392b,0x2e8b57,0xd35400,0x2c7fb8];
+let foeSide=1;
+function mkFoe(col){
+  const g=new THREE.Group(),b=new THREE.Group();g.add(b);const dark=pm(0x241632),wh=pm(0xffffff),cm=pm(col),belly=pm(0xe9c46a);
+  b.add(mesh(G.box,cm,0,1.0,0,1.15,1.2,.85,true));b.add(mesh(G.box,belly,0,.9,.43,.7,.7,.06));
+  for(const sx of[-1,1])b.add(mesh(G.box,pm(0x4a2a63),sx*.3,.3,0,.4,.6,.45,true));
+  const head=new THREE.Group();head.position.set(0,1.95,0);b.add(head);
+  head.add(mesh(G.ico,cm,0,0,0,.62,.55,.58,true));
+  for(const sx of[-1,1]){
+    head.add(mesh(G.sph,wh,sx*.24,.08,.42,.17,.2,.1));head.add(mesh(G.sph,dark,sx*.24,.06,.5,.08,.09,.05));
+    const br=mesh(G.box,dark,sx*.25,.3,.46,.26,.07,.06);br.rotation.z=sx*-.5;head.add(br);
+    const hn=mesh(G.cone,pm(0xf4efe0),sx*.36,.55,0,.1,.3,.1);hn.rotation.z=-sx*.35;head.add(hn);
+  }
+  head.add(mesh(G.box,dark,0,-.2,.5,.34,.13,.05));
+  for(const sx of[-1,1])head.add(mesh(G.box,wh,sx*.1,-.15,.52,.06,.07,.04));
+  const arm=new THREE.Group();arm.position.set(.72,1.45,0);b.add(arm);
+  arm.add(mesh(G.box,cm,0,-.4,0,.3,.8,.3,true));arm.add(mesh(G.cyl,pm(0x7a4b21),0,-1.05,.05,.14,.8,.14,true));arm.add(mesh(G.ico,pm(0x5a3516),0,-1.55,.05,.3,.3,.3,true));
+  const arm2=new THREE.Group();arm2.position.set(-.72,1.45,0);b.add(arm2);arm2.add(mesh(G.box,cm,0,-.4,0,.3,.8,.3,true));
+  g.userData={b,head,arm,arm2};g.scale.setScalar(1.25);return g;
+}
+function addFoe(s){
+  foeSide=-foeSide;const edge=laneX[foeSide<0?0:laneX.length-1]+foeSide*2.9;
+  const g=mkFoe(FOE_COL[(Math.random()*FOE_COL.length)|0]);g.position.set(edge,0,-s);g.rotation.y=foeSide<0?Math.PI/2:-Math.PI/2;
+  world.add(g);foes.push({g,s,x:edge,hit:false,ph:Math.random()*6,al:0});
+}
+function hurt(t){
+  P.hurtT=t;const lose=Math.min(2,P.stars);P.stars-=lose;$('starn').textContent=P.stars;sfx.hurt();
+  burst(P.x,P.y+1.2,-P.s,0xff4040,10,5,.14,.6,5);banner(lose?'Ouch! −'+lose+' ★':'Ouch!');
+  let h=document.getElementById('hurtfx');if(!h){h=document.createElement('div');h.id='hurtfx';h.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:30;background:radial-gradient(transparent 40%,rgba(255,30,30,.55));opacity:0;transition:opacity .45s';document.body.appendChild(h)}
+  h.style.transition='none';h.style.opacity='1';requestAnimationFrame(()=>requestAnimationFrame(()=>{h.style.transition='opacity .45s';h.style.opacity='0'}));
+}
+function updateFoes(dt,t){
+  for(const e of foes){
+    const dz=e.s-P.s,u=e.g.userData,al=dz<16&&dz>-3?1:0;e.al=lerp(e.al,al,Math.min(1,dt*6));
+    e.g.position.y=Math.abs(Math.sin(t*(3+e.al*6)+e.ph))*(0.04+e.al*0.18);
+    u.head.rotation.y=Math.sin(t*1.3+e.ph)*.25*(1-e.al);u.head.rotation.x=e.al*.12;
+    let a=-0.3+Math.sin(t*2+e.ph)*.1;
+    if(dz<16&&dz>5)a=lerp(-0.3,-2.5,clamp((16-dz)/8,0,1));
+    else if(dz<=5&&dz>-1.5)a=lerp(-2.5,-0.2,clamp((5-dz)/5.5,0,1)); /* змах кийком, коли гравець поруч */
+    else if(dz<=-1.5)a=-0.2;
+    u.arm.rotation.x=lerp(u.arm.rotation.x,a,Math.min(1,dt*(dz<5?20:8)));u.arm2.rotation.x=Math.sin(t*5+e.ph)*.4*e.al-.2;
+    if(!e.hit&&S.mode==='free'&&state==='playing'&&Math.abs(dz)<1.4&&Math.abs(P.x-e.x)<3.7&&P.y<1.0&&t-P.hurtT>0.8){e.hit=true;hurt(t)}
+  }
+}
 function updateGame(dt,run){
   const t=now();P.canRun=run;
   const rc=reach(t),sideNow=rc.L||rc.R;
   if(state==='playing'||state==='tutorial'){if(rc.handUp&&!P.rU)emit('armsup');if(sideNow&&!P.rS&&!rc.handUp)emit('armside')}
-  P.rU=rc.handUp;P.rS=sideNow;
+  P.rU=rc.handUp;P.rS=sideNow;if(rc.L||rc.R){P.reachDir=rc.L?-1:1;P.reachT=t}
+  const hm=t-P.hurtT<0.6?0.45:1;
   while(P.ei<events.length&&events[P.ei].done)P.ei++;
   const ev=events[P.ei]||null;
   /* смуга */
@@ -2235,7 +2292,7 @@ function updateGame(dt,run){
   P.waiting=false;P.waitFor=null;let speed=0;
   if(P.leap){
     const L=P.leap;L.t+=dt;const u=Math.min(1,L.t/L.dur);P.y=lerp(L.y0,L.y1,u)+L.peak*4*u*(1-u);P.s+=L.speed*dt;speed=L.speed;
-    if(u>=1){P.leap=null;P.y=L.y1;P.levelY=L.y1;P.vy=0;landFx()}
+    if(u>=1){P.leap=null;P.y=L.y1;P.levelY=L.y1;P.vy=0;P.dj=false;landFx()}
   }else if(run){
     if(P.duck&&P.s>=P.duck)P.duck=0;
     if(ev){
@@ -2247,16 +2304,19 @@ function updateGame(dt,run){
           P.s=Math.min(P.s,stopPt);P.waiting=true;P.waitFor=ev;if(P.waitEv!==ev){P.waitEv=ev;P.arriveT=t}
           waitLogic(ev,t);
         }else{speed=Math.max(1.4,BASE*Math.min(1,rem/3.5));P.s=Math.min(P.s+speed*dt,stopPt)}
-      }else{speed=BASE;P.s+=speed*dt;if(ev.type==='lane'&&P.s>=ev.s)resolve(ev)}
-    }else{speed=BASE;P.s+=speed*dt}
+      }else{speed=BASE*hm;P.s+=speed*dt;if(ev.type==='lane'&&P.s>=ev.s)resolve(ev)}
+    }else{speed=BASE*hm;P.s+=speed*dt}
   }
   P.speed=lerp(P.speed,speed,Math.min(1,dt*8));
   if(run&&S.mode==='free'&&P.s>(P.fm||0)+140){P.fm=P.s;P.done+=8;onProgress()}
   /* вертикаль: хоп / падіння */
-  if(input.jumpTs>P.jumpSeen){P.jumpSeen=input.jumpTs;if(!P.leap&&!P.hop&&(state==='playing'||state==='tutorial'))P.hop={t:0,dur:.62,peak:1.25}}
+  if(input.jumpTs>P.jumpSeen){P.jumpSeen=input.jumpTs;if(state==='playing'||state==='tutorial'){
+      if(!P.leap&&!P.hop&&P.y<=P.levelY+0.05){P.hop={t:0,dur:.62,peak:1.25};P.hopT=t}
+      else if(!P.leap&&!P.dj&&t-P.hopT>0.15){P.dj=true;P.hopT=t;P.hop=null;P.vy=9;if(P.y<P.levelY+0.2)P.y=P.levelY+0.2;sfx.jump();burst(P.x,P.y+0.3,-P.s,0x4ff0ff,12,5,.14,.6,3);banner('Double jump!')}
+    }}
   if(!P.leap){
-    if(P.hop){P.hop.t+=dt;const u=Math.min(1,P.hop.t/P.hop.dur);P.y=P.levelY+P.hop.peak*4*u*(1-u);if(u>=1){P.hop=null;P.y=P.levelY;landFx(true)}}
-    else if(P.y>P.levelY+0.001){P.vy-=32*dt;P.y+=P.vy*dt;if(P.y<=P.levelY){P.y=P.levelY;P.vy=0;landFx()}}
+    if(P.hop){P.hop.t+=dt;const u=Math.min(1,P.hop.t/P.hop.dur);P.y=P.levelY+P.hop.peak*4*u*(1-u);if(u>=1){P.hop=null;P.y=P.levelY;P.dj=false;landFx(true)}}
+    else if(P.y>P.levelY+0.001){P.vy-=32*dt;P.y+=P.vy*dt;if(P.y<=P.levelY){P.y=P.levelY;P.vy=0;P.dj=false;landFx()}}
     else P.y=P.levelY;
   }
   if(!(P.waiting&&P.waitFor&&P.waitFor.type==='punch'))while(input.punchQ.length&&t-input.punchQ[0]>0.5)input.punchQ.shift();
@@ -2291,6 +2351,7 @@ function updateGame(dt,run){
     let tl=ev.type==='board'?ev.lane:-1;if(ev.type==='lane')laneX.forEach((_,l)=>{if(!ev.blocked.has(l)&&tl<0)tl=l});
     marker.visible=true;marker.position.set(laneX[tl],2.3+Math.sin(t*6)*0.25,-(P.s+4));
   }
+  updateFoes(dt,t);
   $('barf').style.width=((P.done%8)/8*100)+'%';$('lvlt').textContent='Level '+(Math.floor(P.done/8)+1);
 }
 function waitLogic(ev,t){
@@ -2304,7 +2365,7 @@ function waitLogic(ev,t){
 }
 
 /* ================= анімація персонажа ================= */
-const _q=new THREE.Quaternion(),_q2=new THREE.Quaternion(),_v=new THREE.Vector3(),_dn=new THREE.Vector3(0,-1,0),_ax=new THREE.Vector3(1,0,0);
+const _zax=new THREE.Vector3(0,0,1),_q=new THREE.Quaternion(),_q2=new THREE.Quaternion(),_v=new THREE.Vector3(),_dn=new THREE.Vector3(0,-1,0),_ax=new THREE.Vector3(1,0,0);
 function mirrorOK(t){return S.mirror&&tr.on&&t-ARM.t<0.4}
 function mirrorArms(c,dt,t,swL,swR){
   for(const[key,arm,sgn,sw]of[['L',c.armL,-1,swL],['R',c.armR,1,swR]]){
@@ -2342,7 +2403,8 @@ function animChar(dt,t){
     if(input.kbdR){c.armR.rotation.x=0;c.armR.rotation.z=1.55}
   }
   c.body.position.y=lerp(c.body.position.y,by,lerpA);c.body.scale.y=lerp(c.body.scale.y,sy,lerpA);c.torso.rotation.x=lerp(c.torso.rotation.x,tilt,lerpA);
-  {const hv=mirrorOK(t)&&tr.head&&t-tr.head.t<0.4&&S.ctrl==='body';const ty=hv?clamp(tr.head.y*1.1,-0.9,0.9):Math.sin(t*1.7)*(sp<0.05?0.35:0.05);c.head.rotation.y=lerp(c.head.rotation.y,ty,Math.min(1,dt*12))}
+  {const hv=mirrorOK(t)&&tr.head&&t-tr.head.t<0.4&&S.ctrl==='body';const ty=hv?clamp(tr.head.y*2.3,-1.25,1.25):Math.sin(t*1.7)*(sp<0.05?0.35:0.05),tz=hv?(tr.head.roll||0):0,tx=hv?-clamp((tr.head.pitch||0)*0.9,-0.5,0.5):0,hk=Math.min(1,dt*12);c.head.rotation.y=lerp(c.head.rotation.y,ty,hk);c.head.rotation.z=lerp(c.head.rotation.z,tz,hk);c.head.rotation.x=lerp(c.head.rotation.x,tx,hk)}
+  if(P.reachDir&&t-P.reachT<0.3&&!duck){const arm=P.reachDir<0?c.armL:c.armR;_q.setFromAxisAngle(_zax,P.reachDir<0?-1.55:1.55);arm.quaternion.slerp(_q,Math.min(1,dt*14))}
   const lean=clamp((laneX[P.laneIdx]-P.x)*0.3,-0.5,0.5);
   c.root.rotation.y=lerp(c.root.rotation.y,-lean,Math.min(1,dt*10));
   c.root.position.set(P.x,P.y,-P.s);
@@ -2352,7 +2414,12 @@ function animChar(dt,t){
 
 /* ================= камера / візуал / цикл ================= */
 const camT=new THREE.Vector3(),camL=new THREE.Vector3();
+const BSEG=150;
+function segHash(i,k){let h=(Math.imul(i+1,2654435761)^Math.imul(k+7,40503))>>>0;h=Math.imul(h^(h>>>15),2246822519)>>>0;return(h>>>13)&1023}
+function segBend(i){if(i<1)return[0,0];return[[-0.0012,0,0,0.0012][segHash(i,1)%4],[0,0.00055,-0.0007][segHash(i,2)%3]]}
+function terrainBend(s){const f=s/BSEG,i=Math.floor(f),u=f-i,w=u*u*(3-2*u),a=segBend(i),b=segBend(i+1);return{x:a[0]+(b[0]-a[0])*w,y:a[1]+(b[1]-a[1])*w}}
 function updateVisuals(dt,t){
+  {const tb=state==='menu'?{x:0,y:0}:terrainBend(P.s);const B=renderer.bend||(renderer.bend={x:0,y:0});B.x=tb.x;B.y=tb.y}
   if(state==='menu'){const a=t*0.25;camT.set(Math.sin(a)*5,3.2,-P.s+Math.cos(a)*7+2);camL.set(0,1.4,-P.s)}
   else{camT.set(P.x*0.6,3.7+P.y*0.85,-P.s+8.2);camL.set(P.x*0.4,1.5+P.y*0.8,-P.s-9)}
   camera.position.lerp(camT,1-Math.exp(-dt*(state==='menu'?2:6)));camera.lookAt(camL);
@@ -2388,7 +2455,7 @@ function setState(s){
 function resetWorld(){
   applyMap();
   for(const[,g]of chunks){world.remove(g);g.userData.inst.forEach(m=>m.dispose())}chunks.clear();clearEvents();
-  setLayout();const keepAssist=P.assist;P=newPlayer();P.assist=keepAssist;P.level=1;genS=34;patN=0;
+  setLayout();const keepAssist=P.assist;P=newPlayer();P.assist=keepAssist;P.level=1;genS=34;patN=0;foeS=80;
   input.laneIdx=S.lanes===3?1:0;input.punchQ.length=0;tr.side=S.lanes===3?0:-1;
   P.laneIdx=input.laneIdx;P.x=laneX[P.laneIdx];buildChar();$('starn').textContent=0;$('coinn').textContent=0;updateChunks();genAhead();
 }
