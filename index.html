@@ -2279,7 +2279,7 @@ function updateGame(dt,run){
   const t=now();P.canRun=run;
   const rc=reach(t),sideNow=rc.L||rc.R;
   if(state==='playing'||state==='tutorial'){if(rc.handUp&&!P.rU)emit('armsup');if(sideNow&&!P.rS&&!rc.handUp)emit('armside')}
-  P.rU=rc.handUp;P.rS=sideNow;if(rc.L||rc.R){P.reachDir=rc.L?-1:1;P.reachT=t}
+  P.rU=rc.handUp;P.rS=sideNow;if(tr.on&&S.ctrl==='body'&&tr.head&&t-tr.head.t<0.35&&tr.headDir&&t-tr.headSince>0.1){P.reachDir=tr.headDir>0?-1:1;P.reachT=t}
   const hm=t-P.hurtT<0.6?0.45:1;
   while(P.ei<events.length&&events[P.ei].done)P.ei++;
   const ev=events[P.ei]||null;
@@ -2312,7 +2312,7 @@ function updateGame(dt,run){
   /* вертикаль: хоп / падіння */
   if(input.jumpTs>P.jumpSeen){P.jumpSeen=input.jumpTs;if(state==='playing'||state==='tutorial'){
       if(!P.leap&&!P.hop&&P.y<=P.levelY+0.05){P.hop={t:0,dur:.62,peak:1.25};P.hopT=t}
-      else if(!P.leap&&!P.dj&&t-P.hopT>0.15){P.dj=true;P.hopT=t;P.hop=null;P.vy=9;if(P.y<P.levelY+0.2)P.y=P.levelY+0.2;sfx.jump();burst(P.x,P.y+0.3,-P.s,0x4ff0ff,12,5,.14,.6,3);banner('Double jump!')}
+      else if(!P.leap&&!P.dj&&t-P.hopT>0.25){P.dj=true;P.hopT=t;P.hop=null;P.vy=9;if(P.y<P.levelY+0.2)P.y=P.levelY+0.2;sfx.jump();burst(P.x,P.y+0.3,-P.s,0x4ff0ff,12,5,.14,.6,3);banner('Double jump!')}
     }}
   if(!P.leap){
     if(P.hop){P.hop.t+=dt;const u=Math.min(1,P.hop.t/P.hop.dur);P.y=P.levelY+P.hop.peak*4*u*(1-u);if(u>=1){P.hop=null;P.y=P.levelY;P.dj=false;landFx(true)}}
@@ -2404,7 +2404,7 @@ function animChar(dt,t){
   }
   c.body.position.y=lerp(c.body.position.y,by,lerpA);c.body.scale.y=lerp(c.body.scale.y,sy,lerpA);c.torso.rotation.x=lerp(c.torso.rotation.x,tilt,lerpA);
   {const hv=mirrorOK(t)&&tr.head&&t-tr.head.t<0.4&&S.ctrl==='body';const ty=hv?clamp(tr.head.y*2.3,-1.25,1.25):Math.sin(t*1.7)*(sp<0.05?0.35:0.05),tz=hv?(tr.head.roll||0):0,tx=hv?-clamp((tr.head.pitch||0)*0.9,-0.5,0.5):0,hk=Math.min(1,dt*12);c.head.rotation.y=lerp(c.head.rotation.y,ty,hk);c.head.rotation.z=lerp(c.head.rotation.z,tz,hk);c.head.rotation.x=lerp(c.head.rotation.x,tx,hk)}
-  if(P.reachDir&&t-P.reachT<0.3&&!duck){const arm=P.reachDir<0?c.armL:c.armR;_q.setFromAxisAngle(_zax,P.reachDir<0?-1.55:1.55);arm.quaternion.slerp(_q,Math.min(1,dt*14))}
+  if(P.reachDir&&t-P.reachT<0.3&&!duck&&!input.kbdL&&!input.kbdR&&!(ARM[P.reachDir<0?'L':'R']&&t-ARM[P.reachDir<0?'L':'R'].t<0.4&&ARM[P.reachDir<0?'L':'R'].y>-0.6)){const arm=P.reachDir<0?c.armL:c.armR;_q.setFromAxisAngle(_zax,P.reachDir<0?-1.55:1.55);arm.quaternion.slerp(_q,Math.min(1,dt*14))}
   const lean=clamp((laneX[P.laneIdx]-P.x)*0.3,-0.5,0.5);
   c.root.rotation.y=lerp(c.root.rotation.y,-lean,Math.min(1,dt*10));
   c.root.position.set(P.x,P.y,-P.s);
